@@ -1,0 +1,8 @@
+[
+  verbose: false,
+  quiet: false,
+  exit_on_vuln: false,
+  skip: false,
+  ignore: [],
+  ignore_files: []
+]

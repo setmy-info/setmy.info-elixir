@@ -1,0 +1,8 @@
+{
+  "coverage_options": {
+    "output_dir": "docs/coverage"
+  },
+  "terminal_options": {
+    "print_files": true
+  }
+}

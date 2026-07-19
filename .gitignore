@@ -8,3 +8,14 @@ erl_crash.dump
 *.beam
 /config/*.secret.exs
 .elixir_ls/
+
+# Lifecycle tool output (packaged tarballs, deploy descriptors, signatures,
+# site reports) - unanchored, generated per-app (apps/<name>/docs/) as well
+# as at the repo root. Same category of gap the JS/Python sides each hit and
+# fixed once already - added proactively here instead of waiting to find it.
+.artifacts/
+.deploy/
+.signatures/
+docs/
+
+**/cover/*

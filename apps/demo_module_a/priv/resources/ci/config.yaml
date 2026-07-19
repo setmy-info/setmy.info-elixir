@@ -1,0 +1,4 @@
+module: demo_module_a
+environment: ci
+apiBaseUrl: http://localhost:8000
+logLevel: info
