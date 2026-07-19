@@ -229,3 +229,34 @@ deciding whether it becomes a fifth umbrella app other apps depend on, or stays 
 library this umbrella's own apps pull in as a regular Hex dependency (its published package, not a
 path dependency) - a real design decision to make explicitly when that migration actually happens,
 not assumed here.
+
+## Round 2: filtered-resources leak out of the cross-language review
+
+Date: 2026-07-19
+
+Found by the cross-language review recorded in `setmy.info-js/report.md` Round 8 (item 37), fixed here as part of that
+round's follow-up. Numbering continues this repo's own sequence.
+
+18. **`mix resources`' generated output shipped inside the published Hex package and was committed as if source.**
+    The Resources task writes profile-filtered output to `apps/<name>/priv/resources/<profile>/`, and Hex's default
+    package file set includes all of `priv/` — the actual `mix hex.build` file listing showed `priv/resources/ci`
+    inside `setmy_info_demo_module_a-1.0.0.tar`, i.e. CI-environment config baked into a supposedly
+    environment-neutral versioned artifact. The same generated file was also committed to git (it rode along in the
+    initial "Elixir solution" commit). Three-part fix, each part verified, plus two real git-behavior discoveries made
+    while verifying:
+    - `package/0` in `demo_module_a`/`demo_module_b`'s `mix.exs` now declares an explicit `files:` allowlist
+      (`lib`, `priv/web`, `mix.exs`, `.formatter.exs`) instead of Hex's default set — re-ran `mix package` with
+      `priv/resources/ci/` present on disk and confirmed the tarball listing now contains `priv/web` only.
+    - `.gitignore` gained a `**/priv/resources/` rule. The `**/` prefix is load-bearing: a gitignore pattern
+      containing a mid-path slash is anchored to the `.gitignore`'s own directory, so a bare `priv/resources/` only
+      matches at the repo root, never under `apps/*` — verified with `git check-ignore`, not assumed.
+    - Even with the correct pattern, `git check-ignore` still reported the file as not ignored — because **a file
+      already in the index is exempt from gitignore entirely**, and the generated file was already tracked via the
+      initial commit. Untracked it with `git rm --cached` (file kept on disk, removal staged); only then did the
+      ignore rule take effect. Practical lesson: adding a gitignore rule for something already committed silently
+      does nothing — check-ignore/status verification after the change is what caught both traps.
+
+    The new spec rule for this whole finding class is `setmy.info-js/requirements-rules.md` §6.6: profile-filtered
+    output MUST NOT be included in a published artifact and MUST be VCS-ignored. The npm side had the same
+    package-leak half of the bug (`dist/resources/` inside `files: ["dist"]`), fixed in the same round; the Python
+    side was clean by construction (its wheel packages only `src/`), which is what made the contrast visible.

@@ -22,7 +22,14 @@ defmodule DemoModuleA.MixProject do
     [
       name: "setmy_info_demo_module_a",
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/setmy-info/setmy.info-elixir"}
+      links: %{"GitHub" => "https://github.com/setmy-info/setmy.info-elixir"},
+      # Explicit allowlist instead of Hex's default file set: the default
+      # includes all of priv/, which shipped mix-resources' generated
+      # priv/resources/<profile>/ output (environment-specific filtered
+      # config) inside the published package - caught by reading the actual
+      # `mix hex.build` file listing, see requirements-rules.md §6.6
+      # (setmy.info-js repo) and report.md.
+      files: ["lib", "priv/web", "mix.exs", ".formatter.exs"]
     ]
   end
 

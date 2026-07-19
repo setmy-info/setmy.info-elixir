@@ -31,7 +31,11 @@ defmodule DemoModuleB.MixProject do
     [
       name: "setmy_info_demo_module_b",
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/setmy-info/setmy.info-elixir"}
+      links: %{"GitHub" => "https://github.com/setmy-info/setmy.info-elixir"},
+      # Explicit allowlist - same reasoning as demo_module_a's package/0:
+      # keep mix-resources' generated priv/resources/<profile>/ output out
+      # of the published package (§6.6).
+      files: ["lib", "priv/web", "mix.exs", ".formatter.exs"]
     ]
   end
 

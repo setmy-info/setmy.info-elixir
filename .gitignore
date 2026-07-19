@@ -18,4 +18,15 @@ erl_crash.dump
 .signatures/
 docs/
 
+# mix resources' profile-filtered output (apps/<name>/priv/resources/<profile>/)
+# - generated, environment-specific, must never be committed as if source nor
+# shipped in a package (requirements-rules.md §6.6 in setmy.info-js; the
+# package side is handled by each app's explicit package files: allowlist).
+# `**/` prefix required: a gitignore pattern containing a mid-path slash is
+# anchored to this file's directory, so a bare `priv/resources/` would only
+# match at the repo root, not under apps/* - verified with git check-ignore,
+# not assumed.
+**/priv/resources/
+
 **/cover/*
+**.tar
