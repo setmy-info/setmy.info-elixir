@@ -96,4 +96,24 @@ defmodule SetmyInfo.Build.WorkspaceHelper do
   def demo_apps_in_order(opts \\ []) do
     apps_in_order(opts) |> Enum.reject(&(&1.name in @tooling_apps))
   end
+
+  @doc """
+  demo_apps_in_order/1, narrowed to apps that actually have a running
+  instance - i.e. a `:port` in `config/config.exs`. The four demo apps do;
+  `commons` is a plain library (no server, no priv/web), so the four
+  server-lifecycle phases (pre/post integration-test, pre/post e2e-test)
+  must not try to start one for it - `Mix.Tasks.Server` raises "No :port
+  configured" rather than skipping, deliberately, since for a demo app a
+  missing port is a real misconfiguration.
+
+  Only those four phases use this; every other fan-out (validate, verify,
+  package, sbom, sign, publish, install_local, deploy, security, site,
+  resources) still covers every non-tooling app, `commons` included - it is
+  a published Hex package like demo_module_a and demo_module_b.
+  """
+  @spec server_apps_in_order(keyword()) :: [app_info()]
+  def server_apps_in_order(opts \\ []) do
+    demo_apps_in_order(opts)
+    |> Enum.filter(&(not is_nil(Application.get_env(&1.name, :port))))
+  end
 end

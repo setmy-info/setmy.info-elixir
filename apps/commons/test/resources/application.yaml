@@ -1,0 +1,31 @@
+application:
+    name: Application 1
+name: "./test/resources/application.yaml"
+a:
+    b:
+        c: application.yaml
+        d: ${SOME_NUMBER_VALUE_A}
+        e: ${SOME_NUMBER_VALUE_B}
+        f: ${SOME_BOOLEAN_VALUE_A}
+        g: ${SOME_BOOLEAN_VALUE_B}
+        h: ${SOME_STRING_VALUE_A}
+        i: ${SOME_STRING_VALUE_B}
+        j: ${NON_EXISTING_VALUE}
+    d: ${SOME_NUMBER_VALUE_A}
+    e: ${SOME_NUMBER_VALUE_B}
+    f: ${SOME_BOOLEAN_VALUE_A}
+    g: ${SOME_BOOLEAN_VALUE_B}
+    h: ${SOME_STRING_VALUE_A}
+    i: ${SOME_STRING_VALUE_B}
+    j: ${NON_EXISTING_VALUE}
+smi:
+    xyz: abc,def,ghi
+    source: application.yaml
+    apiBaseUrl: https://api.setmy.info
+    hosts:
+        - alpha
+        - beta
+    server:
+        host: localhost
+        port: 8080
+        secure: false

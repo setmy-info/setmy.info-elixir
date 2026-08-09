@@ -1,0 +1,6 @@
+application:
+    name: Env Application
+name: "./test/resources/env/application.yaml"
+d:
+    e:
+        f: env/application.yaml

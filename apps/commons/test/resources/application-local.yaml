@@ -1,0 +1,7 @@
+application:
+    name: Local Application
+profileFile: "./test/resources/application-local.yaml"
+smi:
+    source: application-local.yaml
+    server:
+        host: 127.0.0.1

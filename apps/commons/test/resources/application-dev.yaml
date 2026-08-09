@@ -1,0 +1,8 @@
+application:
+    name: Dev Application
+profileFile: "./test/resources/application-dev.yaml"
+smi:
+    source: application-dev.yaml
+    server:
+        host: dev.api.setmy.info
+        port: 9090

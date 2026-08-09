@@ -32,6 +32,9 @@ An umbrella project (`apps_path: "apps"`), not a flat single-app repo - in-umbre
 (`{:demo_module_a, in_umbrella: true}`) link automatically, so there's no workspace-linking problem
 to solve the way npm/`pip` had to.
 
+- `commons` (Hex package `setmy_info_commons`) - **not a demo app**: the real, reusable library of
+  this repo, Spring Boot style layered application configuration. The Elixir row of `clj-commons`
+  and `python-commons` (see "Application configuration" below)
 - `demo_module_a` (Hex package `setmy_info_demo_module_a`) - base app, no local deps
 - `demo_module_b` (Hex package `setmy_info_demo_module_b`) - base app, **the typed worked example**
   (§9): full `@spec` coverage, `mix dialyzer` enforced during `validate` because (and only because)
@@ -43,10 +46,16 @@ to solve the way npm/`pip` had to.
 - `dev_tasks` - not a demo app, hosts every custom `Mix.Task` phase module (see "Why a dedicated
   `dev_tasks` app" below)
 
-Every demo app has a `priv/web/index.html` demo page, its own configured port
+Every **demo** app has a `priv/web/index.html` demo page, its own configured port
 (`config/config.exs`: `48101`/`48111`/`48121`/`48131` for a/b/c/d), and the full
 unit/integration/e2e test-tier split, with `Mix.Tasks.Server` starting/stopping a real
 `Plug.Cowboy` instance around integration/e2e tests - see "Test pyramid" below.
+
+`commons` has the full test-tier split too, but no port and no `priv/web` - it is a library, not a
+service. The four server-lifecycle phases therefore fan out over
+`WorkspaceHelper.server_apps_in_order/1` (apps with a `:port`) rather than `demo_apps_in_order/1`;
+every other phase - validate, verify, package, sbom, sign, install_local, publish, deploy,
+security, site - still covers it, and it publishes to Hex exactly like `demo_module_a`/`b`.
 
 ## Why a dedicated `dev_tasks` app
 
@@ -70,6 +79,57 @@ do (confirmed with the same probe: it printed once, not four times) - hence
 - `lib/mix/tasks/*.ex` - one `Mix.Task` module per §2 phase not already covered by a built-in or an
   alias (resources, server, pre/post-integration-test, pre/post-e2e-test, verify, package, sbom,
   sign, install_local, publish, deploy, validate, site, security)
+
+## Application configuration (`commons` / Hex `setmy_info_commons`)
+
+The Elixir row of `clj-commons` (`info.setmy.*`) and `python-commons` (`smi_python_commons.*`),
+implementing the architecture index's **"Application configuration"** overload order in full.
+Clojure is the base implementation - `config/application.clj` landed 2023-09-07, `application.py`
+2023-10-06 as a faithful port of it - so where the two disagree, Clojure is followed and the choice
+is stated in the module that makes it.
+
+Module names, function names and argument order are kept one-to-one with both:
+
+| Elixir                                    | clj-commons / python-commons |
+|-------------------------------------------|------------------------------|
+| `SetmyInfo.Commons.Config.Application`    | `config.application`         |
+| `SetmyInfo.Commons.Config.Constants`      | `config.constants`           |
+| `SetmyInfo.Commons.Config.Overrides`      | *(new in this row)*          |
+| `SetmyInfo.Commons.Arguments.{Argument,Config,Constants,Parser}` | `arguments.*` |
+| `SetmyInfo.Commons.Environment.Variables` | `environment.variables`      |
+| `SetmyInfo.Commons.{Yaml,Json}.Parser`    | `yaml.parser`, `json.parser` |
+| `SetmyInfo.Commons.{String,File,Collection}.Operations` | `string/file/collection.operations` |
+
+### Overload order
+
+Each layer overrides the one above it:
+
+1. `application.{json,yml,yaml}` from each config path, in order
+2. `application-<profile>.{json,yml,yaml}` for each active profile
+3. optional files from `SMI_OPTIONAL_CONFIG_FILES`, then from `--smi-optional-config-files`
+4. `${ENV_VAR}` placeholders inside those files, resolved *before* parsing, so
+   `port: ${PORT}` with `PORT=8080` yields the integer `8080`
+5. environment variables - `SMI_SERVER_PORT` overrides `smi.server.port`
+6. CLI options - `--smi-server-port 9090` overrides both
+
+```sh
+SMI_SERVER_PORT=9090 my_service --smi-profiles dev --smi-server-port 9091
+```
+
+Files merge **deeply**. The `smi:` / `SMI_` / `--smi-` prefixes are the index's own table.
+
+### Two deliberate divergences from the older two rows
+
+- **`local` is the default active profile.** Both older rows default to no profile at all.
+  ADR-0041 makes `local` the canonical developer-machine environment and ADR-0042 binds profile
+  names to it one-to-one, so it is the only default that can be right without being told. Override
+  with `SMI_PROFILES` / `--smi-profiles`, or opt out with `default_profiles: []`.
+- **Environment and CLI override arbitrary configuration values** (`SetmyInfo.Commons.Config.Overrides`).
+  Neither older row implements this layer - both stop at `${ENV_VAR}` substitution plus the four
+  `SMI_*` control variables, so the index's documented "environment, then CLI" rows were never
+  actually reached there. Only *existing* leaf paths under the `smi` root are overridable, and an
+  override is coerced to the type of the value it replaces; see the module's own docs for why
+  inventing keys and allowing every root key are both off by default.
 
 ## Workspace tooling: Mix umbrella, real org precedent
 
@@ -191,9 +251,18 @@ hiding the constraint - `demo_module_a`/`demo_module_b` (no local deps) package 
 - `test/unit/*_test.exs` - fast, in-process
 - `test/integration/*_test.exs` - against the public API surface only, same divergence rationale as
   the Python side
-- `test/e2e/*_test.exs` - **and** at least one test per app makes a real HTTP request (via `:inets`
-  `httpc`) against a real running instance (§7.5), started by `mix pre_integration_test`/
+- `test/e2e/*_test.exs` - **and** at least one test per demo app makes a real HTTP request (via
+  `:inets` `httpc`) against a real running instance (§7.5), started by `mix pre_integration_test`/
   `mix pre_e2e_test` via `Mix.Tasks.Server` + `Plug.Cowboy`
+
+`commons` splits its tiers strictly by **ADR-0031's dependency table** rather than by speed: unit
+tests are in-memory only, everything that reads a config file or an environment variable is
+integration tier, and the e2e tier drives the whole library end to end (plus a scenario-for-scenario
+port of `python-commons`' `behave` feature, ExUnit-shaped - see
+`apps/commons/test/e2e/environment_variables_test.exs` for why no Cucumber runner). That is also why
+`mix coverage` includes `commons`' integration and e2e tiers and only the demo apps' unit tier:
+unit-only coverage of a library whose job *is* files and environment measures the wrong thing (52%
+against a fully tested library, measured, versus 95% with the right scope).
 
 `apps/dev_tasks/test/unit` and `apps/dev_tasks/test/integration` are the build tooling's own tests
 (§7.7): `workspace_helper_test.exs`/`profile_helper_test.exs` are pure in-process calls;
@@ -223,9 +292,16 @@ own shared-report choice documents.
   project's own* `deps()` when run with `cd:` set to a specific app's path, not the shared root
   `deps/` folder contents; confirmed directly by hitting "task not found" with only a root-level
   declaration.
-- **Coverage is unit-test-scoped only** (`coverage:` alias, not bare `mix coveralls`) - ExUnit
-  auto-discovers every test under `test/**`, so a bare `mix coveralls` at the root pulls in e2e
-  tests too and fails with connection-refused unless every app's e2e server happens to already be
-  running; same scope the JS/Python coverage phases already use.
+- **Coverage is unit-test-scoped** for the demo apps (`coverage:` alias, not bare `mix coveralls`) -
+  ExUnit auto-discovers every test under `test/**`, so a bare `mix coveralls` at the root pulls in
+  e2e tests too and fails with connection-refused unless every app's e2e server happens to already
+  be running; same scope the JS/Python coverage phases already use. `commons` is the one exception,
+  for the ADR-0031 reason given under "Test pyramid"; its tiers need no running instance, so
+  including them does not reintroduce that failure mode.
 - **Publish/Deploy** stay in "prepared, not executed" mode until real registry credentials/target
   infrastructure exist - required by the spec itself (§10), not a gap.
+- **`commons` does not ship its `resources/` or `test/resources/` fixtures**, and has no
+  `resources/` directory at all, so `mix resources` logs "No resources directory for commons,
+  skipping". Its `${...}` placeholders are resolved at *runtime* from the environment, which is the
+  library's own job - not at build time by `Mix.Tasks.Resources` from `profiles/<name>.yaml`. Two
+  different mechanisms that share a syntax; see the "Application configuration" section above.

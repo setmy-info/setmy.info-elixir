@@ -88,15 +88,18 @@ defmodule SetmyInfo.Elixir.MixProject do
   defp aliases do
     [
       "test.unit": [
-        "test apps/demo_module_a/test/unit apps/demo_module_b/test/unit " <>
+        "test apps/commons/test/unit " <>
+          "apps/demo_module_a/test/unit apps/demo_module_b/test/unit " <>
           "apps/demo_module_c/test/unit apps/demo_module_d/test/unit"
       ],
       "test.integration": [
-        "test apps/demo_module_a/test/integration apps/demo_module_b/test/integration " <>
+        "test apps/commons/test/integration " <>
+          "apps/demo_module_a/test/integration apps/demo_module_b/test/integration " <>
           "apps/demo_module_c/test/integration apps/demo_module_d/test/integration"
       ],
       "test.e2e": [
-        "test apps/demo_module_a/test/e2e apps/demo_module_b/test/e2e " <>
+        "test apps/commons/test/e2e " <>
+          "apps/demo_module_a/test/e2e apps/demo_module_b/test/e2e " <>
           "apps/demo_module_c/test/e2e apps/demo_module_d/test/e2e"
       ],
       # Build tooling's own tests (§7.7) - dev_tasks' test/unit (pure) and
@@ -108,8 +111,18 @@ defmodule SetmyInfo.Elixir.MixProject do
       # e2e servers happen to already be running (hit this for real, not
       # assumed): unit coverage is what this phase is supposed to measure,
       # same scope the JS/Python sides' own coverage phase uses.
+      # commons also contributes its integration and e2e tiers here, unlike
+      # the demo apps. ADR-0031 forbids unit tests from touching config
+      # files, data files or environment variables - and reading exactly
+      # those is what setmy_info_commons *is*, so unit-only coverage
+      # measures the wrong thing for it (52% against a fully tested
+      # library, measured). Safe to include because commons' own
+      # integration/e2e tiers need no running instance: the demo apps' e2e
+      # tier does, which is why theirs stays out (see the comment on
+      # test.e2e and Mix.Tasks.PreE2eTest).
       coverage: [
-        "coveralls apps/demo_module_a/test/unit apps/demo_module_b/test/unit " <>
+        "coveralls apps/commons/test/unit apps/commons/test/integration apps/commons/test/e2e " <>
+          "apps/demo_module_a/test/unit apps/demo_module_b/test/unit " <>
           "apps/demo_module_c/test/unit apps/demo_module_d/test/unit"
       ]
     ]
