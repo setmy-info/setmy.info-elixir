@@ -53,7 +53,18 @@ defmodule Mix.Tasks.Server do
     file = state_file(port)
 
     if File.exists?(file) do
-      Mix.raise("HTTP server for port #{port} is already registered.")
+      %{"pid" => pid} = file |> File.read!() |> decode_state()
+
+      if alive?(pid) do
+        Mix.raise("HTTP server for port #{port} is already registered (pid #{pid} is alive).")
+      else
+        # Stale registration (§2 row 2, dirty state): the recorded pid is
+        # dead - an interrupted run between pre_ and post_integration_test,
+        # a crashed test run, a reboot. Replace it instead of wedging every
+        # later start until someone hand-deletes the file.
+        Mix.shell().info("Removing stale HTTP server state for port #{port} (pid #{pid} is dead)")
+        File.rm!(file)
+      end
     end
 
     mix_bin = System.find_executable("mix") || Mix.raise("mix executable not found on PATH")
@@ -72,6 +83,13 @@ defmodule Mix.Tasks.Server do
       File.rm(file)
       Mix.raise("HTTP server on port #{port} did not start listening in time")
     end
+  end
+
+  # `kill -0` sends no signal, only checks that the pid exists and is
+  # signalable - the portable liveness probe (same as Python's
+  # os.kill(pid, 0) / Node's process.kill(pid, 0)).
+  defp alive?(pid) do
+    match?({_, 0}, System.cmd("kill", ["-0", to_string(pid)], stderr_to_stdout: true))
   end
 
   defp wait_until_listening(port, attempts \\ 50)

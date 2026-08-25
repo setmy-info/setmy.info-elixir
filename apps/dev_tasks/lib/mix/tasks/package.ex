@@ -41,7 +41,16 @@ defmodule Mix.Tasks.Package do
   defp build_package(app) do
     dist_name = "setmy_info_#{app.name}"
     artifacts_dir = Path.join([WorkspaceHelper.root_dir(), ".artifacts", dist_name])
+
+    # Dirty-state safety (§2 row 2): this task owns .artifacts/<dist>/, so a
+    # previous run's tarball (possibly of an older version) must not survive
+    # alongside the new one - Maven's package always rebuilds target/*.jar.
+    # Likewise a leftover <dist>-<version>.tar in the app dir itself: Publish's
+    # dry-run path runs `mix hex.build` in place and leaves one there, which
+    # made the strict single-tar match below fail on the very next run.
+    File.rm_rf!(artifacts_dir)
     File.mkdir_p!(artifacts_dir)
+    app.path |> Path.join("*.tar") |> Path.wildcard() |> Enum.each(&File.rm!/1)
 
     mix_bin = System.find_executable("mix") || Mix.raise("mix executable not found on PATH")
     {output, exit_code} = System.cmd(mix_bin, ["hex.build"], cd: app.path, stderr_to_stdout: true)
@@ -51,7 +60,20 @@ defmodule Mix.Tasks.Package do
       Mix.raise("mix hex.build failed for #{app.name} with exit code #{exit_code}")
     end
 
-    [tar_path] = Path.wildcard(Path.join(app.path, "*.tar"))
+    tar_path =
+      case Path.wildcard(Path.join(app.path, "*.tar")) do
+        [tar_path] ->
+          tar_path
+
+        [] ->
+          Mix.raise("mix hex.build for #{app.name} exited 0 but produced no .tar in #{app.path}")
+
+        many ->
+          Mix.raise(
+            "Expected exactly one .tar in #{app.path} after hex.build, found #{inspect(many)}"
+          )
+      end
+
     dest_path = Path.join(artifacts_dir, Path.basename(tar_path))
     File.rename!(tar_path, dest_path)
 

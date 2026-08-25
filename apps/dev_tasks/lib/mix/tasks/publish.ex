@@ -36,22 +36,24 @@ defmodule Mix.Tasks.Publish do
       Enum.each(WorkspaceHelper.demo_apps_in_order(), &publish_app(&1, branch))
     else
       Mix.shell().info(
-        "Skipping publish: branch #{inspect(branch)} is not a publish branch (master/devel*)."
+        "Skipping publish: branch #{inspect(branch)} is not a publish branch (master/devel*/hotfix*)."
       )
     end
   end
 
-  # master or devel* only, NOT release* - matching the Jenkinsfile's own
+  # master, devel* or hotfix* (a candidate for master, Jenkinsfile 1.1.0's
+  # Publish/Hotfix candidate stage) - NOT release* - matching the Jenkinsfile's own
   # `when` conditions exactly (Publish/Release needs `branch 'master'`,
   # Publish/Snapshot needs `startsWith('devel')`; neither matches a
   # release* branch name, so real Jenkins runs no Publish stage there
-  # either - see release-branch.sh's own comment for the same quirk,
-  # already documented on the JS/Python sides). An earlier version of this
+  # either - the same quirk documented on the JS/Python sides). An
+  # earlier version of this
   # check also included "release" here, inconsistent with the Jenkinsfile
   # it's supposed to mirror - caught by comparing the two side by side
-  # while writing ci-local/release-branch.sh, not assumed correct.
+  # while comparing the two side by side, not assumed correct.
   defp publish_branch?(branch) do
-    branch == "master" or String.starts_with?(branch, "devel")
+    branch == "master" or String.starts_with?(branch, "devel") or
+      String.starts_with?(branch, "hotfix")
   end
 
   defp resolve_branch do
@@ -66,23 +68,35 @@ defmodule Mix.Tasks.Publish do
     dist_name = "setmy_info_#{app.name}"
     artifacts_dir = Path.join([WorkspaceHelper.root_dir(), ".artifacts", dist_name])
 
-    if artifacts_dir |> Path.join("*.tar") |> Path.wildcard() != [] do
-      hex_api_key = System.get_env("HEX_API_KEY")
-      mix_bin = System.find_executable("mix") || Mix.raise("mix executable not found on PATH")
+    case WorkspaceHelper.packaged_tar(app) do
+      {:ok, _tar_path} ->
+        do_publish(app, branch)
 
-      if hex_api_key in [nil, ""] do
-        Mix.shell().info(
-          "Dry-run publishing #{app.name} (branch #{branch}) - local build only, no network"
+      {:error, :no_artifacts} ->
+        Mix.shell().info("No packaged tarball to publish for #{app.name} (run package first)")
+
+      {:error, {:version_missing, expected, found}} ->
+        Mix.raise(
+          "No packaged tarball for #{app.name} version #{expected} in #{artifacts_dir} " <>
+            "(found: #{inspect(found)}) - run `mix package` again"
         )
+    end
+  end
 
-        run_mix!(mix_bin, ["hex.build"], app.path, [])
-      else
-        Mix.shell().info("Publishing #{app.name} (branch #{branch})")
+  defp do_publish(app, branch) do
+    hex_api_key = System.get_env("HEX_API_KEY")
+    mix_bin = System.find_executable("mix") || Mix.raise("mix executable not found on PATH")
 
-        run_mix!(mix_bin, ["hex.publish", "--yes"], app.path, [{"HEX_API_KEY", hex_api_key}])
-      end
+    if hex_api_key in [nil, ""] do
+      Mix.shell().info(
+        "Dry-run publishing #{app.name} (branch #{branch}) - local build only, no network"
+      )
+
+      run_mix!(mix_bin, ["hex.build"], app.path, [])
     else
-      Mix.shell().info("No packaged tarball to publish for #{app.name} (run package first)")
+      Mix.shell().info("Publishing #{app.name} (branch #{branch})")
+
+      run_mix!(mix_bin, ["hex.publish", "--yes"], app.path, [{"HEX_API_KEY", hex_api_key}])
     end
   end
 

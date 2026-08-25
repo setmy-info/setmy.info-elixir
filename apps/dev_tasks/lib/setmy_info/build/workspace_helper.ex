@@ -10,7 +10,7 @@ defmodule SetmyInfo.Build.WorkspaceHelper do
   same cwd assumption `scripts/workspace_utils.py`'s `ROOT_DIR` makes.
   """
 
-  @type app_info :: %{name: atom(), path: String.t(), local_deps: [atom()]}
+  @type app_info :: %{name: atom(), path: String.t(), local_deps: [atom()], version: String.t()}
 
   @spec root_dir() :: String.t()
   def root_dir, do: File.cwd!()
@@ -39,7 +39,41 @@ defmodule SetmyInfo.Build.WorkspaceHelper do
       |> Enum.filter(&umbrella_dep?/1)
       |> Enum.map(&elem(&1, 0))
 
-    %{name: app_name, path: app_dir, local_deps: local_deps}
+    %{
+      name: app_name,
+      path: app_dir,
+      local_deps: local_deps,
+      version: Keyword.fetch!(config, :version)
+    }
+  end
+
+  @doc """
+  Package's output tarball for `app`'s *current* version -
+  `.artifacts/setmy_info_<name>/setmy_info_<name>-<version>.tar` - for the
+  phases that consume it (install_local, publish). Deliberately not
+  "whatever `*.tar` happens to be there first": a stale tarball of an older
+  version must be an error, not silently consumed (§2 row 2 dirty-state
+  safety). `{:error, :no_artifacts}` when Package never ran for this app
+  (also the normal case for the in-umbrella-dependent apps Package skips);
+  `{:error, {:version_missing, expected, found_basenames}}` when tarballs
+  exist but none is the current version.
+  """
+  @spec packaged_tar(app_info()) ::
+          {:ok, String.t()}
+          | {:error, :no_artifacts | {:version_missing, String.t(), [String.t()]}}
+  def packaged_tar(app) do
+    dist_name = "setmy_info_#{app.name}"
+    artifacts_dir = Path.join([root_dir(), ".artifacts", dist_name])
+    expected = Path.join(artifacts_dir, "#{dist_name}-#{app.version}.tar")
+
+    if File.regular?(expected) do
+      {:ok, expected}
+    else
+      case artifacts_dir |> Path.join("*.tar") |> Path.wildcard() do
+        [] -> {:error, :no_artifacts}
+        found -> {:error, {:version_missing, app.version, Enum.map(found, &Path.basename/1)}}
+      end
+    end
   end
 
   defp umbrella_dep?({_name, opts}) when is_list(opts),

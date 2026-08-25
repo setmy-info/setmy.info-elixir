@@ -1,5 +1,7 @@
 pipeline {
 
+    // version 1.1.0 - hotfix* branch support (Publish/Hotfix candidate stage, HOTFIX_TO_* deploy
+    //                 flags, jenkinsfile-starter 1.1.0), dead MASTER_TO_PRELIVE flag removed
     // version 1.0.0 - migrated from jenkinsfile-starter for setmy.info-elixir (Mix umbrella,
     // 4-app dependency demo). Maven placeholders from the starter are replaced with real Elixir
     // lifecycle commands (see requirements-rules.md / report.md in setmy.info-js for the full
@@ -7,8 +9,9 @@ pipeline {
     // build history, including real precedent taken from elixir-start-project/PoC/second and
     // elixir-module-loader). No GitHub Actions workflow this time - both of those real repos
     // carry their own .github/workflows/ci.yml, but setmy.info-js's own equivalent was deleted
-    // after repeated DAG-scheduling bugs; Jenkinsfile + ci-local/ stays this system's one working
-    // CI layer across all three languages so far.
+    // after repeated DAG-scheduling bugs; Jenkinsfile is this system's one CI definition
+    // across all three languages (the ci-local/ shell emulation was removed 2026-08-25, to be
+    // replaced by a shared Groovy runner that reads this file directly).
 
     agent any
 
@@ -17,7 +20,6 @@ pipeline {
 
         MASTER_TO_LIVE = 'DEPLOY'
 
-        MASTER_TO_PRELIVE = 'DEPLOY'
         RELEASE_TO_PRELIVE = 'DEPLOY'
 
         DEVELOPMENT_TO_TEST = 'DEPLOY'
@@ -25,6 +27,14 @@ pipeline {
 
         DEVELOPMENT_TO_DEV = 'DEPLOY'
         RELEASE_TO_DEV = 'DEPLOY'
+
+        // hotfix* - branched from master, one fix, quick review + the FULL
+        // automated test path (nothing is skipped), merged to master, which
+        // then deploys live and tags. A hotfix reaches the same
+        // pre-production targets a release does and never goes live directly.
+        HOTFIX_TO_PRELIVE = 'DEPLOY'
+        HOTFIX_TO_TEST = 'DEPLOY'
+        HOTFIX_TO_DEV = 'SKIP'
     }
 
     stages {
@@ -161,6 +171,16 @@ pipeline {
                         sh 'mix publish'
                     }
                 }
+                stage('Hotfix candidate') {
+                    when {
+                        expression { env.BRANCH_NAME.startsWith('hotfix') }
+                    }
+                    steps {
+                        echo 'Software hotfix-candidate publish steps'
+                        sh 'mix install_local'
+                        sh 'mix publish'
+                    }
+                }
                 stage('Release reports') {
                     when {
                         branch 'master'
@@ -186,7 +206,8 @@ pipeline {
                     when {
                         expression {
                             (env.DEVELOPMENT_TO_DEV == 'DEPLOY' && env.BRANCH_NAME.startsWith('devel')) ||
-                            (env.RELEASE_TO_DEV == 'DEPLOY' && env.BRANCH_NAME.startsWith('release'))
+                            (env.RELEASE_TO_DEV == 'DEPLOY' && env.BRANCH_NAME.startsWith('release')) ||
+                            (env.HOTFIX_TO_DEV == 'DEPLOY' && env.BRANCH_NAME.startsWith('hotfix'))
                         }
                     }
                     steps {
@@ -198,7 +219,8 @@ pipeline {
                     when {
                         expression {
                             (env.DEVELOPMENT_TO_TEST == 'DEPLOY' && env.BRANCH_NAME.startsWith('devel')) ||
-                            (env.RELEASE_TO_TEST == 'DEPLOY' && env.BRANCH_NAME.startsWith('release'))
+                            (env.RELEASE_TO_TEST == 'DEPLOY' && env.BRANCH_NAME.startsWith('release')) ||
+                            (env.HOTFIX_TO_TEST == 'DEPLOY' && env.BRANCH_NAME.startsWith('hotfix'))
                         }
                     }
                     steps {
@@ -209,7 +231,8 @@ pipeline {
                 stage('prelive') {
                     when {
                         expression {
-                            env.RELEASE_TO_PRELIVE == 'DEPLOY' && env.BRANCH_NAME.startsWith('release')
+                            (env.RELEASE_TO_PRELIVE == 'DEPLOY' && env.BRANCH_NAME.startsWith('release')) ||
+                            (env.HOTFIX_TO_PRELIVE == 'DEPLOY' && env.BRANCH_NAME.startsWith('hotfix'))
                         }
                     }
                     steps {

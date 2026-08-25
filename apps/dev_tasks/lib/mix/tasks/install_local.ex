@@ -29,12 +29,21 @@ defmodule Mix.Tasks.InstallLocal do
     dist_name = "setmy_info_#{app.name}"
     artifacts_dir = Path.join([WorkspaceHelper.root_dir(), ".artifacts", dist_name])
 
-    case artifacts_dir |> Path.join("*.tar") |> Path.wildcard() do
-      [] ->
+    # The tar for the app's *current* version, not `[tar | _]` of a glob -
+    # a stale tarball of an older version left in .artifacts/ must never be
+    # silently verified in place of the one Package just built.
+    case WorkspaceHelper.packaged_tar(app) do
+      {:ok, tar_path} ->
+        verify_consumer(app, tar_path, artifacts_dir)
+
+      {:error, :no_artifacts} ->
         Mix.shell().info("No packaged tarball to install for #{app.name} (run package first)")
 
-      [tar_path | _] ->
-        verify_consumer(app, tar_path, artifacts_dir)
+      {:error, {:version_missing, expected, found}} ->
+        Mix.raise(
+          "No packaged tarball for #{app.name} version #{expected} in #{artifacts_dir} " <>
+            "(found: #{inspect(found)}) - run `mix package` again"
+        )
     end
   end
 

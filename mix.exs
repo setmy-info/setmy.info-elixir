@@ -87,6 +87,16 @@ defmodule SetmyInfo.Elixir.MixProject do
   # Dialyzer, not assumed in advance.
   defp aliases do
     [
+      # Clean (§2 row 2, "MUST be safe to run from a dirty state"): Maven's
+      # `clean` removes target/ - *everything* generated - whereas stock
+      # `mix clean` only removes _build/ compile output. The lifecycle tasks
+      # here also generate .artifacts/ (tarballs, http-server state files),
+      # .deploy/, .signatures/, docs/ (Site's ExDoc output) and
+      # apps/*/priv/resources/ (Resources' profile-filtered output), and
+      # register background servers whose state file alone wedges a later
+      # `mix pre_integration_test` with "already registered". Ported from
+      # setmy.info-js/report.md Round 10 item 46 (see report.md Round 3).
+      clean: ["clean", &clean_generated/1],
       "test.unit": [
         "test apps/commons/test/unit " <>
           "apps/demo_module_a/test/unit apps/demo_module_b/test/unit " <>
@@ -126,5 +136,48 @@ defmodule SetmyInfo.Elixir.MixProject do
           "apps/demo_module_c/test/unit apps/demo_module_d/test/unit"
       ]
     ]
+  end
+
+  @generated_dirs [".artifacts", ".deploy", ".signatures", "docs"]
+
+  # Stops every HTTP server registered in .artifacts/http-servers/*.json
+  # (dead pids ignored), then removes every generated directory. A plain
+  # function rather than a Mix.Tasks.Clean module in dev_tasks: `clean` is a
+  # built-in task name, and (as the test.* comment above records) custom
+  # task modules named after built-ins don't reliably win at an umbrella
+  # root - and the whole point of clean is to work when _build/ (where
+  # dev_tasks' compiled tasks live) is already gone.
+  defp clean_generated(_args) do
+    File.cwd!()
+    |> Path.join(".artifacts/http-servers/*.json")
+    |> Path.wildcard()
+    |> Enum.each(&stop_registered_server/1)
+
+    # apps/*/*.tar: `mix hex.build` run in place (Publish's dry-run path)
+    # leaves the tarball in the app dir - generated, git-ignored (`**.tar`).
+    generated =
+      Enum.map(@generated_dirs, &Path.join(File.cwd!(), &1)) ++
+        Path.wildcard(Path.join(File.cwd!(), "apps/*/priv/resources")) ++
+        Path.wildcard(Path.join(File.cwd!(), "apps/*/*.tar"))
+
+    Enum.each(generated, fn dir ->
+      if File.exists?(dir) do
+        File.rm_rf!(dir)
+        Mix.shell().info("Removed #{Path.relative_to_cwd(dir)}")
+      end
+    end)
+  end
+
+  defp stop_registered_server(state_file) do
+    case Regex.run(~r/"pid"\s*:\s*"?(\d+)"?/, File.read!(state_file)) do
+      [_, pid] ->
+        # `kill` exits non-zero when the pid is already dead - that's the
+        # dirty-state case this exists for, so it is deliberately ignored.
+        {_output, _status} = System.cmd("kill", [pid], stderr_to_stdout: true)
+        Mix.shell().info("Stopped HTTP server pid #{pid} (#{Path.relative_to_cwd(state_file)})")
+
+      _ ->
+        Mix.shell().info("Ignoring unreadable server state file #{state_file}")
+    end
   end
 end
