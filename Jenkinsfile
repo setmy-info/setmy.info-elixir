@@ -133,17 +133,11 @@ pipeline {
         RELEASE_TO_PRELIVE = 'DEPLOY'
         HOTFIX_TO_PRELIVE = 'DEPLOY'
 
-        // "TEST", not "TESTING" - ADR-0041's canonical environment name.
         DEVELOPMENT_TO_TEST = 'DEPLOY'
         RELEASE_TO_TEST = 'DEPLOY'
         HOTFIX_TO_TEST = 'DEPLOY'
 
         DEVELOPMENT_TO_DEV = 'DEPLOY'
-        RELEASE_TO_DEV = 'DEPLOY'
-        // hotfix* deliberately does not reach DEV: DEV is the development integration target
-        // and a hotfix integrates nothing. The flag exists so the exception is visible rather
-        // than implied by a missing condition.
-        HOTFIX_TO_DEV = 'SKIP'
     }
 
     stages {
@@ -328,20 +322,8 @@ pipeline {
             parallel {
                 stage('dev') {
                     when {
-                        anyOf {
-                            allOf {
-                                environment name: 'DEVELOPMENT_TO_DEV', value: 'DEPLOY'
-                                branch pattern: 'devel.*', comparator: 'REGEXP'
-                            }
-                            allOf {
-                                environment name: 'RELEASE_TO_DEV', value: 'DEPLOY'
-                                branch pattern: 'release.*', comparator: 'REGEXP'
-                            }
-                            allOf {
-                                environment name: 'HOTFIX_TO_DEV', value: 'DEPLOY'
-                                branch pattern: 'hotfix.*', comparator: 'REGEXP'
-                            }
-                        }
+                        environment name: 'DEVELOPMENT_TO_DEV', value: 'DEPLOY'
+                        branch pattern: 'devel.*', comparator: 'REGEXP'
                     }
                     steps {
                         echo 'Development environment installation steps'
@@ -417,7 +399,9 @@ pipeline {
                 branch 'master'
             }
             steps {
-                echo 'Put here tagging steps'
+                echo 'Put here tagging. For example: '
+                echo 'smi-new-tag 1.2.3'
+                echo 'And logic to get tag from source files for example.'
             }
         }
     }

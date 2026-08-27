@@ -327,6 +327,6 @@ Since `jenkinsfile-starter` 1.1.0 (ported here as Jenkinsfile 1.1.0; see `setmy.
 review, never the pipeline: a hotfix runs the exact same Inspection → Package path as every branch (all test tiers,
 quality, packaging), then `mix publish` treats it as a **hotfix candidate** (publish-eligible like `master`/`devel*`) on
 its own channel so the exact build under review can be installed, and deploys to `test` and
-`prelive` (`HOTFIX_TO_TEST`/`HOTFIX_TO_PRELIVE`; `HOTFIX_TO_DEV` is `SKIP` by default). It never deploys `live` and
+`prelive` (`HOTFIX_TO_TEST`/`HOTFIX_TO_PRELIVE`). It never deploys `live` and
 never tags — merging it to `master` is what does that, through the normal master build. The unused `MASTER_TO_PRELIVE` flag (declared since the starter, read by no stage) was removed in the
 same pass.
