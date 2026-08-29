@@ -37,7 +37,17 @@ around them.
 mix deps.get
 mix compile
 mix test              # unit tier
+mix format            # reformat in place - run before every commit
 iex -S mix            # all four endpoints up; http://127.0.0.1:48101/
+```
+
+Formatting is a **local** concern: `mix format` rewrites the files, and CI only verifies with
+`mix format --check-formatted` (a reformat in CI would leave changes in the Jenkins workspace that are never
+committed, and the check could then never fail). Turn on format-on-save in your editor (ElixirLS / Lexical both do
+it), or add a pre-commit hook:
+
+```sh
+printf '#!/bin/sh\nmix format --check-formatted\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
 ## Application configuration (`commons` / Hex `setmy_info_commons`)
