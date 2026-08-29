@@ -1,4 +1,0 @@
-module: demo_module_a
-environment: ${profile}
-apiBaseUrl: ${apiBaseUrl}
-logLevel: ${logLevel}

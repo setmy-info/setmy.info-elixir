@@ -9,6 +9,8 @@ defmodule SetmyInfo.Commons.ConfigurationLoadingE2eTest do
 
   use SetmyInfo.Commons.EnvironmentCase, async: false
 
+  @moduletag :e2e
+
   alias SetmyInfo.Commons.Config.Application, as: ConfigApplication
 
   test "every layer overrides the one above it, in the documented order" do

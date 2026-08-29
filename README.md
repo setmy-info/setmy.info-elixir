@@ -2,80 +2,43 @@
 
 Monorepo for Elixir, Erlang modules, libraries, applications and API-s.
 
-This repo doubles as a **reference implementation**, the Elixir row of the same system
-`setmy.info-js` (Node/npm) and `setmy.info-python` (Python/`venv`+`pip`) already implement: a Mix **umbrella project**
-deliberately shaped to mirror the
-[Maven default build lifecycle](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html#default-lifecycle),
-each app independently versioned and (where Hex actually allows it) separately publishable. See **ADR-0045** (software
-build lifecycles, in `setmy-info.github.io`) for the maintained phase-mapping table across Maven / npm / Python /
-Elixir / Make, and
-`setmy.info-js/requirements-rules.md` for the language-agnostic spec this implements one row of - that document is
-deliberately npm-source-free in its normative text.
+A plain **Mix umbrella project**: every app is independently versioned, independently published to Hex, and
+independently deployable as its own OTP release. There is no custom build system on top of Mix — the commands below are
+the ones any Elixir developer already knows.
 
-Maven-closeness is a **soft rule**, same as the npm/Python sides: phase names/ordering are kept for the
-context-switching savings, but where a 1:1 imitation would need a hack Mix/Hex don't naturally support, the natural
-Elixir way wins and the difference is documented ("Known deliberate differences" below).
-
-Built from real org precedent, not from ADR-0045 guesses alone: `elixir-start-project/PoC/second`
-(a full calculator service, extensively self-audited in its own `PoC/comparision.md`) and
+Built from real org precedent: `elixir-start-project/PoC/second` (a full calculator service) and
 `elixir-start-project/PoC/first` (an umbrella project built around a dynamic module-loading engine, the ancestor of the
-real, published `elixir-module-loader` hex package) both already validate the tooling choices below in this same org.
-Per the plan this repo was built from, this skeleton is **minimal demo scope** - small pure-function modules plus one
-running-instance e2e server per app, matching `setmy.info-js`/`setmy.info-python`'s own scope, not PoC/second's full
-REST/GraphQL/Ecto surface (which stays reference material, see `report.md`).
+published `elixir-module-loader` hex package) both validate the tooling choices below in this same org. The demo scope
+is deliberately small — pure-function modules plus one HTTP endpoint per app — not PoC/second's full REST/GraphQL/Ecto
+surface.
 
 ## Apps
 
-An umbrella project (`apps_path: "apps"`), not a flat single-app repo - in-umbrella deps
-(`{:demo_module_a, in_umbrella: true}`) link automatically, so there's no workspace-linking problem to solve the way
-npm/`pip` had to.
+An umbrella project (`apps_path: "apps"`), not a flat single-app repo. In-umbrella deps link automatically, so there is
+no workspace-linking problem to solve the way npm/`pip` had to.
 
-- `commons` (Hex package `setmy_info_commons`) - **not a demo app**: the real, reusable library of this repo, Spring
-  Boot style layered application configuration. The Elixir row of `clj-commons`
-  and `python-commons` (see "Application configuration" below)
-- `demo_module_a` (Hex package `setmy_info_demo_module_a`) - base app, no local deps
-- `demo_module_b` (Hex package `setmy_info_demo_module_b`) - base app, **the typed worked example**
-  (§9): full `@spec` coverage, `mix dialyzer` enforced during `validate` because (and only because)
-  this app's own `mix.exs` has a `:dialyzer` project key - mirrors the JS side's `tsconfig.json`
-  presence / Python's `[tool.mypy]` table presence
-- `demo_module_c` - depends on `a` and `b` (`in_umbrella: true`); proves §9.4's typed/untyped coexistence
-- `demo_module_d` - depends on `c`, the deepest node in the demo graph
-- `dev_tasks` - not a demo app, hosts every custom `Mix.Task` phase module (see "Why a dedicated
-  `dev_tasks` app" below)
+- `commons` (Hex `setmy_info_commons`) — **not a demo app**: the real, reusable library of this repo, Spring Boot style
+  layered application configuration. The Elixir row of `clj-commons` and `python-commons` (see "Application
+  configuration" below). A library: no supervision tree, no port.
+- `demo_module_a` (Hex `setmy_info_demo_module_a`) — base app, no local deps
+- `demo_module_b` (Hex `setmy_info_demo_module_b`) — the typed worked example: full `@spec` coverage
+- `demo_module_c` (Hex `setmy_info_demo_module_c`) — depends on `a` and `b`; typed and untyped code side by side
+- `demo_module_d` (Hex `setmy_info_demo_module_d`) — depends on `c`, the deepest node in the demo graph
 
-Every **demo** app has a `priv/web/index.html` demo page, its own configured port (`config/config.exs`: `48101`/`48111`/
-`48121`/`48131` for a/b/c/d), and the full unit/integration/e2e test-tier split, with `Mix.Tasks.Server`
-starting/stopping a real
-`Plug.Cowboy` instance around integration/e2e tests - see "Test pyramid" below.
+Each demo app is a real OTP application: its `mod:` callback starts a supervision tree with one `Plug.Cowboy` endpoint
+serving that app's `priv/web/index.html` on its own port (`48101`/`48111`/`48121`/`48131` for a/b/c/d, set in
+`config/config.exs`). Anything that starts the application gets the endpoint — `iex -S mix`, `mix run --no-halt`,
+`mix test`, or the release — which is why the e2e tests can just make HTTP requests without anything starting a server
+around them.
 
-`commons` has the full test-tier split too, but no port and no `priv/web` - it is a library, not a service. The four
-server-lifecycle phases therefore fan out over
-`WorkspaceHelper.server_apps_in_order/1` (apps with a `:port`) rather than `demo_apps_in_order/1`; every other phase -
-validate, verify, package, sbom, sign, install_local, publish, deploy, security, site - still covers it, and it
-publishes to Hex exactly like `demo_module_a`/`b`.
+## Getting started
 
-## Why a dedicated `dev_tasks` app
-
-A custom `Mix.Task` module placed directly under the umbrella root's own `lib/mix/tasks/` is **not discoverable** by
-`mix <task>`, even after `mix compile` - confirmed directly with a probe task before committing to this design, not
-assumed from Mix's docs. Standard task discovery only looks at what's compiled as part of a real app; the umbrella root
-itself is never "compiled" as one. Custom tasks also do **not** auto-recurse per-app the way built-ins like `mix test`/
-`mix compile`
-do (confirmed with the same probe: it printed once, not four times) - hence
-`SetmyInfo.Build.WorkspaceHelper`'s own hand-rolled fan-out logic, used by every phase task.
-
-`apps/dev_tasks` hosts:
-
-- `lib/setmy_info/build/workspace_helper.ex` - umbrella app discovery (`apps/*/mix.exs` glob) + topological sort (Kahn's
-  algorithm) + `demo_apps_in_order/1`, the Elixir equivalent of
-  `workspace-utils.js`/`workspace_utils.py`
-- `lib/setmy_info/build/profile_helper.ex` - ADR-0041/0042 canonical profile validation + root/app YAML merge, the
-  equivalent of `profile-utils.js`/`profile_utils.py`
-- `lib/setmy_info/build/static_server_plug.ex` - wraps `Plug.Static` with a `/` → `index.html`
-  rewrite (`Plug.Static` doesn't map bare `/` on its own) and a 404 fallback
-- `lib/mix/tasks/*.ex` - one `Mix.Task` module per §2 phase not already covered by a built-in or an alias (resources,
-  server, pre/post-integration-test, pre/post-e2e-test, verify, package, sbom, sign, install_local, publish, deploy,
-  validate, site, security)
+```sh
+mix deps.get
+mix compile
+mix test              # unit tier
+iex -S mix            # all four endpoints up; http://127.0.0.1:48101/
+```
 
 ## Application configuration (`commons` / Hex `setmy_info_commons`)
 
@@ -127,206 +90,119 @@ Files merge **deeply**. The `smi:` / `SMI_` / `--smi-` prefixes are the index's 
   Only *existing* leaf paths under the `smi` root are overridable, and an override is coerced to the type of the value
   it replaces; see the module's own docs for why inventing keys and allowing every root key are both off by default.
 
-## Workspace tooling: Mix umbrella, real org precedent
 
-- **Bootstrap**: `mix deps.get` at the umbrella root - genuinely simpler than JS/Python here, no
-  "which interpreter/package manager" ambiguity to solve; Mix deps live in the project's own
-  `deps/`/`_build/`, not a global store.
-- **Custom phase commands**: a mix of real `Mix.Task` modules (`dev_tasks`) and root `mix.exs`
-  aliases (`test.unit`/`test.integration`/`test.e2e`/`tooling_test`/`coverage`) - aliases were required specifically for
-  the `test.*` names because they collide with `mix test`'s own built-in alias-resolution/umbrella-recursion behavior in
-  a way a plain `Mix.Task` module doesn't reliably intercept (confirmed directly, not assumed - see `mix.exs`'s own
-  comment on this).
-- **Resource/profile filtering** (§6): `Mix.Tasks.Resources` + YAML profiles (`profiles/<name>.yaml`), the same
-  `${propertyName}` substitution and the same YAML choice as the Python side (confirmed as the org's real convention via
-  `python-commons`'s PyYAML dependency and
-  `elixir-module-loader`'s own config shape) - decoupled from Mix's own env system, same as the npm/Python sides keep
-  resource profiles independent of `NODE_ENV`/no stdlib env concept.
+## Tests
 
-## Lifecycle
-
-Run from the repository root, in order:
+Three tiers, run one by one:
 
 ```sh
-mix deps.get                                                      # bootstrap
-mix clean                                                         # + stops registered servers, removes all generated output (see below)
-mix validate                                                      # structural + dialyzer (demo_module_b)
-mix format --check-formatted                                      # or: mix format to auto-fix
-mix credo --strict
-mix resources --profile local                                     # local|dev|ci|test|prelive|live
-mix compile --warnings-as-errors
-mix tooling_test                                                  # build tooling's own tests, §7.7
-mix test.unit
-mix pre_integration_test
+mix test.unit          # == mix test; the default, fastest tier
 mix test.integration
-mix post_integration_test
-mix pre_e2e_test
 mix test.e2e
-mix post_e2e_test
-mix coverage                                                      # ExCoveralls, unit-test-scoped
-mix security                                                      # Sobelow per app + deps.audit
-mix verify
-mix package                                                       # mix hex.build; skips c, d (see below)
-mix sbom
-mix sign
-mix install_local                                                 # repurposed - see below
-mix publish                                                       # dry-run (mix hex.build) unless HEX_API_KEY set
-DEPLOY_TARGET=dev mix deploy                                      # dev|test|prelive|live
-mix site                                                           # mix docs + aggregated report index
+mix test.all           # all three in one run
 ```
 
-This whole sequence has been run clean, end to end, on this machine (Elixir 1.19.5 / Erlang OTP 29), across the full
-mixed typed/untyped app graph, including real HTTP e2e requests against every app's own running instance. See
-`report.md` for the bugs that surfaced while verifying it and how they were fixed.
+Tiers are **ExUnit tags**, not path lists. Each app's `test_helper.exs` starts with
+`ExUnit.start(exclude: [:integration, :e2e])`, and every module in `test/integration/` or `test/e2e/` carries the
+matching `@moduletag`. That keeps `mix test`'s own umbrella recursion doing the work — adding or removing an app needs
+no change anywhere — and makes a bare `mix test` the fast one. The directory split under `test/` is kept for
+readability.
 
-`Jenkinsfile` runs this same sequence in CI, same stage skeleton as `setmy.info-js`/
-`setmy.info-python`'s own `Jenkinsfile` (Inspection → Preparation → Build → E2E → Quality/reporting →
-System/Acceptance → Package → Publish → Deploy → Tag), same branch-gated Publish/Deploy pattern (`master` / `devel*` /
-`release*`). **No GitHub Actions workflow** - deliberate divergence from both real PoCs (which each carry their own
-`.github/workflows/ci.yml`):
-`setmy.info-js`'s own `ci.yml` was deleted after repeated DAG-scheduling bugs, and
-`setmy.info-python` never got one; `Jenkinsfile` is this system's one CI definition across all three
-languages.
+- `test/unit/` — fast, in-process, no files, no environment, no network
+- `test/integration/` — the public API surface, config files, environment variables
+- `test/e2e/` — the library or app driven end to end; for each demo app that includes real HTTP requests
+  (`:httpc`) against its own running endpoint
 
-### Emulating CI locally, without Jenkins — planned, not present
+`commons` splits its tiers by **ADR-0031's dependency table** rather than by speed: unit tests are in-memory only,
+anything reading a config file or an environment variable is integration tier, and the e2e tier drives the whole library
+as a real application would (including a scenario-for-scenario port of `python-commons`' `behave` feature, ExUnit-shaped
+— see `apps/commons/test/e2e/environment_variables_test.exs` for why no Cucumber runner).
 
-The POSIX-`sh` `ci-local/` emulation scripts were **removed** (2026-08-25). They duplicated the `Jenkinsfile`'s stage
-order and branch gating in a second language, which is exactly the drift risk §3.11 warns about — every hotfix-branch
-or phase change had to be made twice, in three repos (this repo's copy included). The replacement, planned but not built yet, is a **small Groovy
-runner shared by all three repos** that reads the real `Jenkinsfile` (the org `jenkinsfile-starter` shape plus these
-three implementations of it) and executes its `stages`/`steps`/`when` closures locally, so there is one source of
-truth instead of a copy. Until it exists, `Jenkinsfile` is the CI definition and there is no local emulation — run the
-individual lifecycle commands from the "Lifecycle" section above by hand.
+## Quality tooling
 
-## Publish / Deploy (prepared, not wired to a real target yet)
+```sh
+mix quality            # everything below, in order, as one gate
+```
 
-`Mix.Tasks.Publish` never calls real `mix hex.publish` unless `HEX_API_KEY` is set - confirmed directly, not assumed
-from the flag name, that `mix hex.publish --dry-run --yes` still tries to authenticate/prompt before reaching its "no
-publish" behavior, and hangs indefinitely with no TTY (`--yes` only skips the confirm-to-publish prompt, not the
-authenticate-now one). The safe default path reuses `mix hex.build` instead (Package's own local-only validation) and
-just logs what branch/app would have published.
+| Command | Tool | What it checks |
+|---|---|---|
+| `mix format --check-formatted` | Elixir formatter | formatting |
+| `mix compile --warnings-as-errors` | compiler | warnings, type errors |
+| `mix credo --strict` | Credo | style, consistency, refactoring opportunities |
+| `mix dialyzer` | Dialyxir | success typing, across the whole umbrella |
+| `mix sobelow` | Sobelow | static security analysis, per app |
+| `mix audit` | mix_audit | dependency advisories |
+| `mix coverage` | ExCoveralls | aggregated coverage, HTML report in `cover/` |
+| `mix docs` | ExDoc | API documentation in `doc/` |
 
-`Mix.Tasks.Deploy` requires the `DEPLOY_TARGET` environment variable (there is no `--target`
-flag; `Jenkinsfile` sets it) to be one of `dev`/`test`/`prelive`/`live` and
-writes a
-`.deploy/<dist-name>/<target>/deploy.json` descriptor with `status: "prepared-not-executed"` - same as the npm/Python
-sides, no real target infrastructure exists yet.
+Notes on the two that are not simply the stock invocation:
 
-### `install-local`, repurposed
+- **`mix sobelow`** is an alias for `mix cmd mix sobelow --exit medium`. Sobelow refuses to run against an umbrella
+  root ("each application should be scanned separately"), so it is fanned out over `apps/*` with Mix's own `cmd`
+  recursion, and it is declared in each app's `deps` rather than at the root — a task's binary only resolves against
+  the current project's own dependencies. `--exit medium` gates on medium- and high-confidence findings: reading a
+  caller-supplied config path is `commons`' entire job, and Sobelow reports that as a low-confidence
+  `Traversal.FileModule` finding. It stays printed; it does not fail the build.
+- **`mix coverage`** is `mix coveralls.html --umbrella --include integration --include e2e`. `--umbrella` aggregates
+  every app into one report at the root, which is also the only place ExCoveralls looks for `coveralls.json` (it reads
+  it from the current directory, and per-app runs happen inside `apps/<name>/`). Each app declares
+  `test_coverage: [tool: ExCoveralls]` itself — without it, `mix test --cover` silently falls back to Mix's built-in
+  cover tool for that app.
 
-Same repurposing as the Python side: installs the *packaged* `.tar` (Package's actual output) plus every transitive
-in-umbrella-sibling tarball into a disposable scratch Mix project as path dependencies, and confirms it compiles and the
-public API resolves. Elixir doesn't need this for umbrella siblings themselves (`in_umbrella: true` already links them
-at dev time automatically), but it still catches packaging bugs (missing `priv/` files, a wrong file list) the same way
-the Python side's own repurposing does, since dev-time compilation never exercises a package's declared file-inclusion
-rules the way installing the actual tarball does.
+`.mix_audit_ignore` is the per-advisory escape hatch for `mix audit`: each entry documents why a finding is accepted
+and when it must be re-reviewed. It is not a blanket suppression.
 
-### Package: `demo_module_c`/`demo_module_d` are structurally excluded
+## Publishing — one package per app
 
-`mix hex.build` fails outright for any app with `in_umbrella: true` deps: *"Dependencies excluded from the package (only
-Hex packages can be dependencies): demo_module_a, demo_module_b"* - a real, unfixable-by-engineering constraint of Hex
-itself, not a bug in this build. `Mix.Tasks.Package`
-detects apps with local deps and skips them with a clear log line instead of silently failing or hiding the constraint -
-`demo_module_a`/`demo_module_b` (no local deps) package normally.
+Every app publishes to Hex separately, with `mix hex.publish` run from that app's own directory:
 
-## Test pyramid
+```sh
+cd apps/demo_module_a
+HEX_BUILD=1 mix hex.build          # inspect the tarball first
+HEX_BUILD=1 mix hex.publish
+```
 
-- `test/unit/*_test.exs` - fast, in-process
-- `test/integration/*_test.exs` - against the public API surface only, same divergence rationale as the Python side
-- `test/e2e/*_test.exs` - **and** at least one test per demo app makes a real HTTP request (via
-  `:inets` `httpc`) against a real running instance (§7.5), started by `mix pre_integration_test`/
-  `mix pre_e2e_test` via `Mix.Tasks.Server` + `Plug.Cowboy`
+Or every app at once, from the umbrella root: `HEX_BUILD=1 mix cmd mix hex.build`.
 
-`commons` splits its tiers strictly by **ADR-0031's dependency table** rather than by speed: unit tests are in-memory
-only, everything that reads a config file or an environment variable is integration tier, and the e2e tier drives the
-whole library end to end (plus a scenario-for-scenario port of `python-commons`' `behave` feature, ExUnit-shaped - see
-`apps/commons/test/e2e/environment_variables_test.exs` for why no Cucumber runner). That is also why
-`mix coverage` includes `commons`' integration and e2e tiers and only the demo apps' unit tier:
-unit-only coverage of a library whose job *is* files and environment measures the wrong thing (52% against a fully
-tested library, measured, versus 95% with the right scope).
+### Why `HEX_BUILD`
 
-`apps/dev_tasks/test/unit` and `apps/dev_tasks/test/integration` are the build tooling's own tests (§7.7):
-`workspace_helper_test.exs`/`profile_helper_test.exs` are pure in-process calls;
-`server_test.exs` spawns a real `mix server start`/`stop` subprocess and makes a real HTTP request against it. Run via
-`mix tooling_test`.
+`demo_module_c` and `demo_module_d` depend on umbrella siblings. Hex refuses to package a dependency that carries any
+SCM key (`:git`, `:github`, `:path`, `:in_umbrella`) unless it also carries `:hex` naming the published package —
+without it, `mix hex.build` stops with *"Dependencies excluded from the package (only Hex packages can be
+dependencies)"*.
 
-## Clean: safe from a dirty state
+That `:hex` option cannot simply be left on permanently: it makes Hex resolve the sibling's **own** dependencies from
+the registry instead of from its `mix.exs`, so `mix compile` run from inside a dependent app's directory then fails to
+compile the sibling. So the option is added only when `HEX_BUILD` is set — see the `sibling/2` helper in
+`apps/demo_module_c/mix.exs`. Day-to-day development never sets it.
 
-Maven's `clean` removes `target/` - everything generated - and `requirements-rules.md` §2 row 2 requires the lifecycle
-to be safe to run from a dirty state. Stock `mix clean` only removes
-`_build/` compile output, so the root `mix.exs` aliases `clean` to stock `clean` **plus**:
+## Deploying — one release per app
 
-- stopping every background HTTP server registered in `.artifacts/http-servers/*.json` (a dead pid is ignored - that is
-  exactly the interrupted-run case this exists for);
-- removing `.artifacts/`, `.deploy/`, `.signatures/`, `docs/` (`mix site`'s ExDoc output) and every
-  `apps/*/priv/resources/` (`mix resources`' profile-filtered output).
+Each demo app has its own OTP release:
 
-Two related dirty-state guards live in the tasks themselves: `mix server start` treats a state file whose pid is no
-longer alive (`kill -0`) as stale and replaces it instead of failing with "already registered", and `mix package` wipes
-its own `.artifacts/<dist-name>/` plus any leftover `*.tar` in the app directory (which `mix publish`'s dry-run
-`hex.build` leaves behind) before building.
-`mix install_local`/`mix publish` consume the tarball matching the app's *current* `version:`, and fail clearly if only
-an older one is present.
+```sh
+MIX_ENV=live mix release demo_module_a
+_build/live/rel/demo_module_a/bin/demo_module_a start
+```
 
-## Security / Quality gate policy
+`mix release.all` builds every one of them for the current `MIX_ENV` (`mix release` requires a name when more than one
+release is configured). `commons` has no release: it is a library, consumed as a Hex package, not run.
 
-`mix security` **gates on any finding**, everywhere (local and CI alike), with no severity threshold - a deliberately
-stricter policy than Maven's `dependency-check:check` (CVSS threshold,
-`failBuildOnCVSS`) and than the JS sibling, which gates at `npm audit --audit-level=high`. The two halves differ in what
-a threshold *could* look like:
+Mix environments follow **ADR-0041**'s canonical names — `local`, `dev`, `ci`, `test`, `prelive`, `live` — each with its
+own `config/<env>.exs`, plus `config/runtime.exs` for values that must come from the environment at boot.
 
-- Sobelow findings could be thresholded via `mix sobelow --threshold low|medium|high` (or a per-app `.sobelow-conf`,
-  which `mix security`'s `--config` flag would pick up - none exists today, so Sobelow runs with its defaults); not done
-  today.
-- `mix deps.audit` has no severity threshold at all - it exits non-zero on any unignored advisory.
-  `.mix_audit_ignore` is the reasoned, per-advisory escape hatch (each entry documents why the finding is accepted and
-  when it must be re-reviewed), not a blanket suppression.
+## CI
 
-The full, un-thresholded Sobelow + `deps.audit` output is also copied into the site report by
-`mix site`, so relaxing the gate later would not hide anything.
-
-## Site (reports)
-
-`mix site` runs `mix docs` (ExDoc, `output: "docs"`, `main: "readme"`) and writes
-`docs/reports/index.html` linking the lint report (`mix credo --strict`, rendered), the security report (`mix security`
-'s own Sobelow+`deps.audit` output), and the dependency tree (`mix deps.tree`) - all **shared across the whole
-umbrella**, not per-app, since there's one shared
-`deps/`/`_build/` and one `mix.lock`, not one environment per app - same reasoning the Python side's own shared-report
-choice documents.
-
-## Known deliberate differences from `setmy.info-js` / `setmy.info-python` / Maven
-
-- **SBOM is a hand-rolled CycloneDX-shaped JSON placeholder**, explicitly labeled as such (§11.2 allows this) - no
-  actively-maintained real CycloneDX generator exists for Hex/Mix, unlike the Python side which got a real generator
-  (`cyclonedx-py`) because one exists.
-- **Sign** is still a SHA-256 checksum placeholder, same as the npm/Python sides - no real signature infrastructure
-  exists anywhere in this system yet.
-- **`demo_module_c`/`demo_module_d` never produce a Hex package** - see "Package" above, a real Hex constraint, not a
-  gap in this build.
-- **`dialyxir` (demo_module_b only) and `sobelow` (all four demo apps) are declared per-app, not at the umbrella
-  root** - `mix dialyzer`/`mix sobelow` resolve task visibility against the *current project's own* `deps()` when run
-  with `cd:` set to a specific app's path, not the shared root
-  `deps/` folder contents; confirmed directly by hitting "task not found" with only a root-level declaration.
-- **Coverage is unit-test-scoped** for the demo apps (`coverage:` alias, not bare `mix coveralls`) - ExUnit
-  auto-discovers every test under `test/**`, so a bare `mix coveralls` at the root pulls in e2e tests too and fails with
-  connection-refused unless every app's e2e server happens to already be running; same scope the JS/Python coverage
-  phases already use. `commons` is the one exception, for the ADR-0031 reason given under "Test pyramid"; its tiers need
-  no running instance, so including them does not reintroduce that failure mode.
-- **Publish/Deploy** stay in "prepared, not executed" mode until real registry credentials/target infrastructure exist -
-  required by the spec itself (§10), not a gap.
-- **`commons` does not ship its `resources/` or `test/resources/` fixtures**, and has no
-  `resources/` directory at all, so `mix resources` logs "No resources directory for commons, skipping". Its `${...}`
-  placeholders are resolved at *runtime* from the environment, which is the library's own job - not at build time by
-  `Mix.Tasks.Resources` from `profiles/<name>.yaml`. Two different mechanisms that share a syntax; see the "Application
-  configuration" section above.
+`Jenkinsfile` is the single CI definition: Inspection → Build → Unit tests → Integration tests → E2E tests → Quality
+(format/lint, types, security in parallel) → Coverage and docs → System/Acceptance → Package → Publish → Deploy → Tag,
+with the org's standard branch gating (`master` / `devel*` / `release*` / `hotfix*`). The three test tiers are separate
+stages on purpose, so a failure names the tier it happened in. No GitHub Actions workflow.
 
 ### Hotfix branches (`hotfix*`)
 
-Since `jenkinsfile-starter` 1.1.0 (ported here as Jenkinsfile 1.1.0; see `setmy.info-js/requirements-rules.md` §3.1), a
-`hotfix*` branch — branched from `master`, one fix, quick review — is a first-class branch case. "Quick" is the human
-review, never the pipeline: a hotfix runs the exact same Inspection → Package path as every branch (all test tiers,
-quality, packaging), then `mix publish` treats it as a **hotfix candidate** (publish-eligible like `master`/`devel*`) on
-its own channel so the exact build under review can be installed, and deploys to `test` and
-`prelive` (`HOTFIX_TO_TEST`/`HOTFIX_TO_PRELIVE`; `HOTFIX_TO_DEV` is `SKIP` by default). It never deploys `live` and
-never tags — merging it to `master` is what does that, through the normal master build. The unused `MASTER_TO_PRELIVE` flag (declared since the starter, read by no stage) was removed in the
-same pass.
+A `hotfix*` branch — branched from `master`, one fix, quick review — is a first-class branch case. "Quick" is the human
+review, never the pipeline: a hotfix runs the exact same Inspection → Package path as every other branch (all test
+tiers, quality, packaging), is publish-eligible like `master`/`devel*` so the exact build under review can be
+installed, and deploys to `test` and `prelive` (`HOTFIX_TO_TEST`/`HOTFIX_TO_PRELIVE`; `HOTFIX_TO_DEV` is `SKIP` by
+default). It never deploys `live` and never tags — merging it to `master` is what does that, through the normal master
+build.

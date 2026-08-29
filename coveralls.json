@@ -1,7 +1,11 @@
 {
   "coverage_options": {
-    "output_dir": "docs/coverage"
+    "output_dir": "cover/",
+    "minimum_coverage": 90
   },
+  "skip_files": [
+    "lib/setmy_info/demo_module_./application.ex"
+  ],
   "terminal_options": {
     "print_files": true
   }

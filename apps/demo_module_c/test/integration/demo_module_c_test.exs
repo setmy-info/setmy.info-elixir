@@ -1,6 +1,8 @@
 defmodule SetmyInfo.DemoModuleC.IntegrationTest do
   use ExUnit.Case, async: true
 
+  @moduletag :integration
+
   test "module c public API" do
     message = SetmyInfo.DemoModuleC.create_message()
     assert message =~ "message from demo_module_a"

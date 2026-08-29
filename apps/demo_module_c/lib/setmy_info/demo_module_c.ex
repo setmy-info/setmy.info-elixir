@@ -1,8 +1,8 @@
 defmodule SetmyInfo.DemoModuleC do
   @moduledoc """
-  Module C - depends on a (untyped) and b (typed): §9.4's coexistence proof.
-  c itself stays plain/unchecked, and neither import below needs to know or
-  care that demo_module_b was written with Dialyzer specs (§9.3).
+  Module C - depends on a (unspecced) and b (specced), showing the two
+  coexisting. c itself stays plain, and neither alias below needs to know or
+  care that demo_module_b was written with Dialyzer specs.
   """
 
   require Logger

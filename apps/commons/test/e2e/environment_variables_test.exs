@@ -14,6 +14,8 @@ defmodule SetmyInfo.Commons.EnvironmentVariablesE2eTest do
 
   use SetmyInfo.Commons.EnvironmentCase, async: false
 
+  @moduletag :e2e
+
   alias SetmyInfo.Commons.Environment.Variables
 
   defp given_environment_variable(variable_name, variable_value) do

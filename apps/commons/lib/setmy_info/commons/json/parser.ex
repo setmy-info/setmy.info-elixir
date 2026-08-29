@@ -5,8 +5,7 @@ defmodule SetmyInfo.Commons.Json.Parser do
   (clj-commons) / `smi_python_commons.json.parser` (python-commons).
 
   Uses the stdlib `JSON` module (Elixir 1.18+ / OTP 27+ `:json`) rather than
-  adding a Jason dependency - the same choice `Mix.Tasks.Server` in
-  `dev_tasks` already made for its own state file.
+  adding a Jason dependency.
   """
 
   alias SetmyInfo.Commons.File.Operations, as: FileOperations

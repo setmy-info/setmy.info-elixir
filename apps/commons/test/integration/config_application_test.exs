@@ -14,6 +14,8 @@ defmodule SetmyInfo.Commons.Config.ApplicationIntegrationTest do
 
   use SetmyInfo.Commons.EnvironmentCase, async: false
 
+  @moduletag :integration
+
   alias SetmyInfo.Commons.Arguments.{Config, Constants}
   alias SetmyInfo.Commons.Config.Application, as: ConfigApplication
 

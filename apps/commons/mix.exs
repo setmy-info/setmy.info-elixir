@@ -17,12 +17,18 @@ defmodule Commons.MixProject do
       package: package(),
       start_permanent: Mix.env() == :live,
       elixirc_paths: elixirc_paths(Mix.env()),
+      # Declared per app, not only at the umbrella root: `mix test --cover`
+      # runs with each app as the current project, and without this it falls
+      # back to Mix's built-in cover tool instead of ExCoveralls.
+      test_coverage: [tool: ExCoveralls],
+      # test/support/ holds the shared ExUnit.CaseTemplate, required from
+      # test_helper.exs rather than loaded as a test file.
+      test_ignore_filters: [~r"^test/support/"],
       deps: deps()
     ]
   end
 
-  # Same explicit allowlist reasoning as demo_module_a's own package/0: Hex's
-  # default file set sweeps in all of priv/, and this app additionally carries
+  # Explicit file allowlist rather than Hex's default set: this app carries
   # test/resources/*.yaml fixtures that must never ship to consumers.
   defp package do
     [
@@ -33,14 +39,14 @@ defmodule Commons.MixProject do
     ]
   end
 
-  # yaml_elixir is a real runtime dependency here (not dev tooling like it is
-  # for dev_tasks): parsing application.yaml is this library's whole job.
-  # sobelow per-app for the same reason every other app declares it - see
-  # demo_module_a's mix.exs comment.
+  # yaml_elixir is a real runtime dependency: parsing application.yaml is this
+  # library's whole job. sobelow is declared per app for the reason every other
+  # app declares it - see demo_module_a's mix.exs comment.
   defp deps do
     [
       {:yaml_elixir, "~> 2.12"},
-      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false}
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end
 

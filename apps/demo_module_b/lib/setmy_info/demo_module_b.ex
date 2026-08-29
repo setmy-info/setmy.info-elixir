@@ -1,10 +1,9 @@
 defmodule SetmyInfo.DemoModuleB do
   @moduledoc """
-  Module B - the typed worked example (§9): full `@spec` coverage, checked by
-  `mix dialyzer` because this app (and only this app) has a `:dialyzer` key
-  in its `mix.exs`. Downstream apps (c, d - plain, unchecked) consume it
-  exactly like any other app (§9.3): they never need to know or care it was
-  written with specs.
+  Module B - the typed worked example: full `@spec` coverage, checked by
+  `mix dialyzer` like every other app in the umbrella. Downstream apps (c, d
+  - plain, unspecced) consume it exactly like any other app: they never need
+  to know or care it was written with specs.
   """
 
   require Logger

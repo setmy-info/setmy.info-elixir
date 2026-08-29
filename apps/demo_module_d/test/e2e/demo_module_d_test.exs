@@ -1,6 +1,8 @@
 defmodule SetmyInfo.DemoModuleD.E2eTest do
   use ExUnit.Case, async: true
 
+  @moduletag :e2e
+
   test "module d public API e2e" do
     message = SetmyInfo.DemoModuleD.create_message()
     assert message =~ "message from demo_module_c"

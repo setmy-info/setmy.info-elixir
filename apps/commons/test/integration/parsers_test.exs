@@ -8,6 +8,8 @@ defmodule SetmyInfo.Commons.ParsersIntegrationTest do
 
   use SetmyInfo.Commons.EnvironmentCase, async: false
 
+  @moduletag :integration
+
   alias SetmyInfo.Commons.Config.Application, as: ConfigApplication
   alias SetmyInfo.Commons.File.Operations, as: FileOperations
   alias SetmyInfo.Commons.Json.Parser, as: JsonParser

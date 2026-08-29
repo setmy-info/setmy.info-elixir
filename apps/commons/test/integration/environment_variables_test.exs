@@ -8,6 +8,8 @@ defmodule SetmyInfo.Commons.Environment.VariablesIntegrationTest do
 
   use SetmyInfo.Commons.EnvironmentCase, async: false
 
+  @moduletag :integration
+
   alias SetmyInfo.Commons.Config.Overrides
   alias SetmyInfo.Commons.Environment.Variables
 

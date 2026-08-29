@@ -1,16 +1,29 @@
 defmodule SetmyInfo.DemoModuleA.ServerTest do
   @moduledoc """
-  §7.5: at least one e2e test makes a real request against the running
-  instance started by `mix pre_e2e_test` (`mix server start --app
-  demo_module_a`), not just re-imports the built code.
+  Real HTTP requests against the app's own running instance - the Cowboy
+  endpoint supervised by `SetmyInfo.DemoModuleA.Application`, which `mix test`
+  brings up together with the application itself.
   """
 
   use ExUnit.Case, async: true
 
-  test "e2e server serves the web page" do
-    {:ok, {{_, 200, _}, _headers, body}} =
-      :httpc.request(~c"http://127.0.0.1:48101/")
+  @moduletag :e2e
+
+  @base ~c"http://127.0.0.1:48101"
+
+  test "serves the demo page at the root" do
+    {:ok, {{_, 200, _}, _headers, body}} = :httpc.request(@base ++ ~c"/")
 
     assert String.contains?(to_string(body), "Module A web example")
+  end
+
+  test "serves the demo page at its own path" do
+    {:ok, {{_, 200, _}, _headers, body}} = :httpc.request(@base ++ ~c"/index.html")
+
+    assert String.contains?(to_string(body), "Module A web example")
+  end
+
+  test "answers 404 for anything else" do
+    {:ok, {{_, 404, _}, _headers, _body}} = :httpc.request(@base ++ ~c"/no-such-page")
   end
 end
