@@ -24,9 +24,11 @@ defmodule SetmyInfo.Commons.String.Operations do
   @empty_string ""
   @placeholder_pattern ~r/\$\{(.*?)\}/
 
+  @doc "The default `split_and_trim/2` delimiter: `\",\"`."
   @spec comma_string() :: String.t()
   def comma_string, do: @comma_string
 
+  @doc "The empty string `\"\"`, the default for the `default_text`/`join_text` arguments below."
   @spec empty_string() :: String.t()
   def empty_string, do: @empty_string
 
@@ -36,6 +38,7 @@ defmodule SetmyInfo.Commons.String.Operations do
     text |> String.split(delimiter) |> trim_list()
   end
 
+  @doc "Trims leading and trailing whitespace from every string in the list."
   @spec trim_list([String.t()]) :: [String.t()]
   def trim_list(strings_list), do: Enum.map(strings_list, &String.trim/1)
 
@@ -75,6 +78,11 @@ defmodule SetmyInfo.Commons.String.Operations do
     end
   end
 
+  @doc """
+  Whole-string float parse (`"1.5"` -> `1.5`; `"1.5abc"` does not parse).
+  `nil` text or an unparsable string yields `default_value`, and a `nil`
+  default degrades to `0.0`, mirroring `to_int/2`.
+  """
   @spec to_float(String.t() | nil, number() | nil) :: number()
   def to_float(text, default_value \\ 0.0)
   def to_float(nil, nil), do: 0.0
@@ -102,6 +110,11 @@ defmodule SetmyInfo.Commons.String.Operations do
     end
   end
 
+  @doc """
+  Parses a YAML document, falling back to `default_value` when `text` is
+  `nil` or fails to parse. Keys stay strings (see
+  `SetmyInfo.Commons.Yaml.Parser`).
+  """
   @spec yaml_to_object(String.t() | nil, term()) :: term()
   def yaml_to_object(text, default_value \\ %{})
   def yaml_to_object(nil, default_value), do: default_value

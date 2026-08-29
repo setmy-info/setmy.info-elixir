@@ -22,6 +22,13 @@ defmodule SetmyInfo.Commons.Arguments.Argument do
           required: boolean()
         }
 
+  @doc """
+  Builds an option declaration. `name` is the long flag without the leading
+  `--` (`"smi-profiles"`), `short_flag` the single-letter alias or `nil`,
+  `argument_type` the optional cast function applied to the captured value,
+  `argument_help` the summary text and `required` whether a missing option
+  is reported as an error by the parser.
+  """
   @spec new(String.t(), String.t() | nil, (String.t() -> term()) | nil, String.t(), boolean()) ::
           t()
   def new(name, short_flag, argument_type \\ nil, argument_help \\ "", required \\ false) do

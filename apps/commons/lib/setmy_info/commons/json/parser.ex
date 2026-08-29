@@ -10,6 +10,14 @@ defmodule SetmyInfo.Commons.Json.Parser do
 
   alias SetmyInfo.Commons.File.Operations, as: FileOperations
 
+  @doc """
+  Reads and decodes a JSON file. `post_actions` may carry
+  `:post_read_function` (applied to the raw text before decoding) and
+  `:post_parse_function` (applied to the decoded value); both default to
+  identity, and `nil` is accepted in place of the map. Returns the decoded
+  (and post-processed) value, or `nil` when the content is not valid JSON -
+  which includes the `""` a missing file reads as.
+  """
   @spec parse_json_file(Path.t(), map() | nil) :: term() | nil
   def parse_json_file(file_name, post_actions \\ %{}) do
     post_actions = post_actions || %{}

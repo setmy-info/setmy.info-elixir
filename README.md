@@ -27,9 +27,9 @@ no workspace-linking problem to solve the way npm/`pip` had to.
 
 Each demo app is a real OTP application: its `mod:` callback starts a supervision tree with one `Plug.Cowboy` endpoint
 serving that app's `priv/web/index.html` on its own port (`48101`/`48111`/`48121`/`48131` for a/b/c/d, set in
-`config/config.exs`). Anything that starts the application gets the endpoint — `iex -S mix`, `mix run --no-halt`,
-`mix test`, or the release — which is why the e2e tests can just make HTTP requests without anything starting a server
-around them.
+`config/config.exs`). Anything that starts the application gets the endpoint — `iex -S mix`, `mix run --no-halt`, or
+the release. In the integration and e2e tiers, though, the test VM runs with `--no-start` and the HTTP requests go to
+the release daemons brought up by `mix server.start` (see "Tests").
 
 ## Getting started
 
@@ -65,7 +65,7 @@ Module names, function names and argument order are kept one-to-one with both:
 | `SetmyInfo.Commons.Config.Application`                           | `config.application`                |
 | `SetmyInfo.Commons.Config.Constants`                             | `config.constants`                  |
 | `SetmyInfo.Commons.Config.Overrides`                             | *(new in this row)*                 |
-| `SetmyInfo.Commons.Arguments.{Argument,Config,Constants,Parser}` | `arguments.*`                       |
+| `SetmyInfo.Commons.Arguments.{Argument,Config,Constants,ParsedArguments,Parser}` | `arguments.*`   |
 | `SetmyInfo.Commons.Environment.Variables`                        | `environment.variables`             |
 | `SetmyInfo.Commons.{Yaml,Json}.Parser`                           | `yaml.parser`, `json.parser`        |
 | `SetmyInfo.Commons.{String,File,Collection}.Operations`          | `string/file/collection.operations` |
@@ -100,7 +100,6 @@ Files merge **deeply**. The `smi:` / `SMI_` / `--smi-` prefixes are the index's 
   Only *existing* leaf paths under the `smi` root are overridable, and an override is coerced to the type of the value
   it replaces; see the module's own docs for why inventing keys and allowing every root key are both off by default.
 
-
 ## Tests
 
 Three tiers, run one by one:
@@ -112,11 +111,40 @@ mix test.e2e
 mix test.all           # all three in one run
 ```
 
-Tiers are **ExUnit tags**, not path lists. Each app's `test_helper.exs` starts with
+Tiers are **ExUnit tags**, not path lists. Each app's `test_helper.exs` ends with
 `ExUnit.start(exclude: [:integration, :e2e])`, and every module in `test/integration/` or `test/e2e/` carries the
 matching `@moduletag`. That keeps `mix test`'s own umbrella recursion doing the work — adding or removing an app needs
 no change anywhere — and makes a bare `mix test` the fast one. The directory split under `test/` is kept for
 readability.
+
+### Integration and e2e run against real running instances
+
+The integration and e2e tiers are bracketed by **pre and post steps**, the shape of Maven failsafe's
+`pre-integration-test` / `integration-test` / `post-integration-test`:
+
+```sh
+mix server.start                          # build every app's OTP release (test env) and start it as a daemon
+mix test --only e2e --no-start            # the tier, against the daemons; --no-start: no second copy in the test VM
+mix server.stop                           # stop the daemons; idempotent
+```
+
+`mix test.integration` / `mix test.e2e` / `mix test.all` / `mix coverage` are exactly those three steps as one
+alias. What the e2e tier exercises is therefore the **release artifact** — what gets deployed — not code hosted inside
+the test runner. `server.start` waits until every port answers, and first stops anything a previous aborted run left
+behind. Mix stops an alias at the first failing task, so after a failing tier run `mix server.stop` yourself (CI does it
+in `post { always }`).
+
+Inside a release only the release's own app opens its endpoint: `demo_module_c`'s release also starts `a` and `b`
+(Mix will not let a `:permanent` app's dependencies be merely loaded), but there they are libraries, and a second
+copy of `a`'s endpoint next to `a`'s own release would fail with `:eaddrinuse`. `config/runtime.exs` switches
+`serve: false` for every app except `RELEASE_NAME`; under Mix every app serves.
+
+Every run also writes **JUnit XML**, one file per app, to `reports/junit/` (`junit_formatter`, wired in each app's
+`test_helper.exs`, directory pinned in `config/test.exs`) — what Jenkins' `junit` step reads. The file name comes from
+`JUNIT_REPORT_FILE` (default `test-junit-report.xml`), so CI gives every tier its own file instead of overwriting
+the previous tier's.
+
+`mix test.watch` (`mix_test_watch`) re-runs the unit tier on every save during development.
 
 - `test/unit/` — fast, in-process, no files, no environment, no network
 - `test/integration/` — the public API surface, config files, environment variables
@@ -140,10 +168,29 @@ mix quality            # everything below, in order, as one gate
 | `mix compile --warnings-as-errors` | compiler | warnings, type errors |
 | `mix credo --strict` | Credo | style, consistency, refactoring opportunities |
 | `mix dialyzer` | Dialyxir | success typing, across the whole umbrella |
+| `mix xref.cycles` | `mix xref` | module dependency cycles (none allowed) |
+| `mix doctor` | Doctor | documentation coverage: `@moduledoc`, `@doc`, `@spec` on everything public (`.doctor.exs`, 100 %) |
 | `mix sobelow` | Sobelow | static security analysis, per app |
-| `mix audit` | mix_audit | dependency advisories |
-| `mix coverage` | ExCoveralls | aggregated coverage, HTML report in `cover/` |
-| `mix docs` | ExDoc | API documentation in `doc/` |
+| `mix audit` | mix_audit + `mix hex.audit` | dependency vulnerability advisories, retired packages |
+
+All of them are **gates** — each fails on a finding. The **documents** are produced separately:
+
+```sh
+mix reports            # everything below, in one go
+```
+
+| Command | Tool | Output |
+|---|---|---|
+| `mix docs` | ExDoc | API documentation, `doc/` |
+| `mix coverage` | ExCoveralls | coverage over all three tiers, HTML for people, `cover/excoveralls.html` (minimum 90 %, `coveralls.json`) |
+| `mix coverage.xml` | ExCoveralls | the same as SonarQube generic coverage XML, `cover/excoveralls.xml` (standalone, not part of `mix reports`: ExCoveralls accumulates stats per Mix VM, so two coverage runs in one invocation would double-count) |
+| `mix sbom` | sbom | CycloneDX software bill of materials from `mix.lock`, `reports/sbom/bom.xml` |
+| `mix security.reports` | mix_audit, Sobelow | vulnerability reports as JSON, `reports/security/` |
+| *(part of `mix reports`)* | `mix deps.tree` | dependency tree, `reports/deps.tree.txt` |
+| every `mix test*` run | junit_formatter | JUnit XML per app, `reports/junit/` |
+
+Test code is not documented separately: ExUnit test modules are their own specification, and `@moduledoc` on a test
+module is the convention where one is needed (see `apps/commons/test/e2e/environment_variables_test.exs`).
 
 Notes on the two that are not simply the stock invocation:
 
@@ -159,8 +206,9 @@ Notes on the two that are not simply the stock invocation:
   `test_coverage: [tool: ExCoveralls]` itself — without it, `mix test --cover` silently falls back to Mix's built-in
   cover tool for that app.
 
-`.mix_audit_ignore` is the per-advisory escape hatch for `mix audit`: each entry documents why a finding is accepted
-and when it must be re-reviewed. It is not a blanket suppression.
+Two ignore lists, one per audit tool, same discipline — each entry documents why a finding is accepted and when it
+must be re-reviewed, never a blanket suppression: `.mix_audit_ignore` for mix_audit, and `hex: [ignore_advisories:]`
+in `mix.exs` for `mix hex.audit` (Hex's own advisory database is broader, so it can list what mix_audit does not).
 
 ## Publishing — one package per app
 
@@ -172,7 +220,9 @@ HEX_BUILD=1 mix hex.build          # inspect the tarball first
 HEX_BUILD=1 mix hex.publish
 ```
 
-Or every app at once, from the umbrella root: `HEX_BUILD=1 mix cmd mix hex.build`.
+Or every app at once, from the umbrella root: `HEX_BUILD=1 mix cmd mix hex.build`. Use `mix hex.publish package`
+rather than bare `mix hex.publish` from an app directory: the bare form also builds docs, and `ex_doc` is declared at
+the umbrella root only.
 
 ### Why `HEX_BUILD`
 
@@ -203,16 +253,24 @@ own `config/<env>.exs`, plus `config/runtime.exs` for values that must come from
 
 ## CI
 
-`Jenkinsfile` is the single CI definition: Inspection → Build → Unit tests → Integration tests → E2E tests → Quality
-(format/lint, types, security in parallel) → Coverage and docs → System/Acceptance → Package → Publish → Deploy → Tag,
-with the org's standard branch gating (`master` / `devel*` / `release*` / `hotfix*`). The three test tiers are separate
-stages on purpose, so a failure names the tier it happened in. No GitHub Actions workflow.
+`Jenkinsfile` is the single CI definition, kept stage-for-stage in sync with `jenkinsfile-starter` 1.2.0 (no stages
+or steps added or removed, only the placeholders filled): Inspection (pre-build checks ‖ build tools) → Preparation
+(`mix deps.get`, `mix deps.unlock --check-unused`) → Build → Publish → Deploy → Tag, with the org's standard branch
+gating (`master` / `devel*` / `release*` / `hotfix*`). The Build stage runs, in order: `mix clean`, format check,
+compile and test-compile (`MIX_ENV=test`) with warnings as errors, the unit tier, the integration tier bracketed by
+`mix server.start` / `mix server.stop`, the quality gates, `mix reports`, the e2e tier bracketed the same way, and
+`HEX_BUILD=1 mix cmd mix hex.build`. Each is its own `mix` line, so the build log names what failed. `post { always }`
+stops any daemons a failed tier left behind, feeds `reports/junit/*.xml` to Jenkins' `junit` step and archives
+`cover/`, `doc/`, `reports/` and the tarballs. Publish (`master` only — Hex has no snapshots, a version publishes
+exactly once, so `devel*` keeps its tarballs as archived artifacts) runs `mix cmd mix hex.publish package --yes` when
+`HEX_API_KEY` is set (`package`, because the bare form also builds docs with `ex_doc`, a root-only dependency an app
+directory cannot see); Deploy builds the releases with `mix release.all --overwrite` for the target `MIX_ENV`. No
+GitHub Actions workflow.
 
 ### Hotfix branches (`hotfix*`)
 
 A `hotfix*` branch — branched from `master`, one fix, quick review — is a first-class branch case. "Quick" is the human
-review, never the pipeline: a hotfix runs the exact same Inspection → Package path as every other branch (all test
-tiers, quality, packaging), is publish-eligible like `master`/`devel*` so the exact build under review can be
-installed, and deploys to `test` and `prelive` (`HOTFIX_TO_TEST`/`HOTFIX_TO_PRELIVE`; `HOTFIX_TO_DEV` is `SKIP` by
-default). It never deploys `live` and never tags — merging it to `master` is what does that, through the normal master
-build.
+review, never the pipeline: a hotfix runs the exact same Inspection → Build path as every other branch (all test
+tiers, quality, packaging), is not published (only `master` and `devel*` publish), and deploys to `test` and `prelive`
+(`HOTFIX_TO_TEST` / `HOTFIX_TO_PRELIVE`). It never deploys `dev` or `live` and never tags — merging it to `master` is
+what does that, through the normal master build.

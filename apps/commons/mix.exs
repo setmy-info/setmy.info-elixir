@@ -9,7 +9,7 @@ defmodule Commons.MixProject do
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       description:
         "Spring Boot style layered application configuration - YAML files, profiled YAML " <>
           "overlays, environment placeholder resolution, environment variable overrides and " <>

@@ -14,6 +14,7 @@ defmodule SetmyInfo.Commons.Arguments.Config do
 
   @type t :: %__MODULE__{description: String.t(), arguments: [Argument.t()]}
 
+  @doc "Builds a CLI config from a `description` and its `Argument` declarations."
   @spec new(String.t(), [Argument.t()]) :: t()
   def new(description, arguments) do
     %__MODULE__{description: description, arguments: arguments}

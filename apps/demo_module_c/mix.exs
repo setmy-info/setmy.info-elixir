@@ -9,7 +9,7 @@ defmodule DemoModuleC.MixProject do
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       description: "Module C - depends on a and b, proving typed/untyped coexistence.",
       package: package(),
       start_permanent: Mix.env() == :live,

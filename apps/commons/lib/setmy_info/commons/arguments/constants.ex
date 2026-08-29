@@ -15,6 +15,7 @@ defmodule SetmyInfo.Commons.Arguments.Constants do
   alias SetmyInfo.Commons.Arguments.{Argument, Config}
   alias SetmyInfo.Commons.String.Operations, as: StringOperations
 
+  @doc "`--smi-profiles` / `-p`: comma separated profile names, cast to a trimmed list."
   @spec smi_profiles_argument() :: Argument.t()
   def smi_profiles_argument do
     Argument.new(
@@ -25,6 +26,7 @@ defmodule SetmyInfo.Commons.Arguments.Constants do
     )
   end
 
+  @doc "`--smi-config-paths` / `-c`: comma separated config directories, cast to a trimmed list."
   @spec smi_config_paths_argument() :: Argument.t()
   def smi_config_paths_argument do
     Argument.new(
@@ -35,6 +37,7 @@ defmodule SetmyInfo.Commons.Arguments.Constants do
     )
   end
 
+  @doc "`--smi-optional-config-files` / `-o`: comma separated config file paths, cast to a trimmed list."
   @spec smi_optional_config_files_argument() :: Argument.t()
   def smi_optional_config_files_argument do
     Argument.new(
@@ -45,11 +48,13 @@ defmodule SetmyInfo.Commons.Arguments.Constants do
     )
   end
 
+  @doc "`--smi-name` / `-n`: the application name, kept as the raw string."
   @spec smi_name_argument() :: Argument.t()
   def smi_name_argument do
     Argument.new("smi-name", "n", &Function.identity/1, "Application name.")
   end
 
+  @doc "All four `--smi-*` declarations, in the order of the architecture index table."
   @spec smi_arguments() :: [Argument.t()]
   def smi_arguments do
     [

@@ -14,32 +14,42 @@ defmodule SetmyInfo.Commons.Environment.Variables do
 
   alias SetmyInfo.Commons.String.Operations, as: StringOperations
 
+  @doc "Sets `variable_name` to `variable_value` in the current OS process environment."
   @spec set_environment_variable(String.t(), String.t()) :: :ok
   def set_environment_variable(variable_name, variable_value) do
     System.put_env(variable_name, variable_value)
   end
 
+  @doc "Removes `variable_name` from the current OS process environment; a no-op if it is unset."
   @spec delete_environment_variable(String.t()) :: :ok
   def delete_environment_variable(variable_name), do: System.delete_env(variable_name)
 
+  @doc "Raw value of `variable_name`, or `nil` when it is not set."
   @spec get_environment_variable(String.t()) :: String.t() | nil
   def get_environment_variable(variable_name), do: System.get_env(variable_name)
 
+  @doc """
+  Reads `variable_name` through `StringOperations.to_boolean/2`: `false`
+  when unset, raises on a value that is not `true`/`yes`/`false`/`no`.
+  """
   @spec get_boolean_environment_variable(String.t()) :: boolean()
   def get_boolean_environment_variable(variable_name) do
     StringOperations.to_boolean(get_environment_variable(variable_name))
   end
 
+  @doc "Reads `variable_name` through `StringOperations.to_int/2`: `0` when unset or not a whole integer."
   @spec get_int_environment_variable(String.t()) :: number()
   def get_int_environment_variable(variable_name) do
     StringOperations.to_int(get_environment_variable(variable_name))
   end
 
+  @doc "Reads `variable_name` through `StringOperations.to_float/2`: `0.0` when unset or not a float."
   @spec get_float_environment_variable(String.t()) :: number()
   def get_float_environment_variable(variable_name) do
     StringOperations.to_float(get_environment_variable(variable_name))
   end
 
+  @doc "Reads `variable_name` through `StringOperations.json_to_object/2`: `%{}` when unset or invalid JSON."
   @spec get_json_environment_variable(String.t()) :: term()
   def get_json_environment_variable(variable_name) do
     StringOperations.json_to_object(get_environment_variable(variable_name))

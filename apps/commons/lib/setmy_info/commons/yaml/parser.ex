@@ -22,6 +22,14 @@ defmodule SetmyInfo.Commons.Yaml.Parser do
           optional(:post_parse_function) => (term() -> term())
         }
 
+  @doc """
+  Reads and parses a YAML file. `post_actions` may carry
+  `:post_read_function` (applied to the raw text before parsing) and
+  `:post_parse_function` (applied to the parsed value); both default to
+  identity, and `nil` is accepted in place of the map. Returns the parsed
+  (and post-processed) value, or `nil` when the content is not valid YAML.
+  A missing file reads as `""`, which parses to an empty document.
+  """
   @spec parse_yaml_file(Path.t(), post_actions() | nil) :: term() | nil
   def parse_yaml_file(file_name, post_actions \\ %{}) do
     post_actions = post_actions || %{}

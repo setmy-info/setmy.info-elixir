@@ -18,15 +18,19 @@ defmodule SetmyInfo.Commons.Config.Constants do
   @default_config_paths ["./resources", "./test/resources"]
   @default_override_root_keys ["smi"]
 
+  @doc "Environment variable naming the comma separated config directories: `SMI_CONFIG_PATHS`."
   @spec smi_config_paths() :: String.t()
   def smi_config_paths, do: @smi_config_paths
 
+  @doc "Environment variable naming the comma separated active profiles: `SMI_PROFILES`."
   @spec smi_profiles() :: String.t()
   def smi_profiles, do: @smi_profiles
 
+  @doc "Environment variable naming extra, comma separated config files: `SMI_OPTIONAL_CONFIG_FILES`."
   @spec smi_optional_config_files() :: String.t()
   def smi_optional_config_files, do: @smi_optional_config_files
 
+  @doc "Environment variable carrying the application name: `SMI_NAME`."
   @spec smi_name() :: String.t()
   def smi_name, do: @smi_name
 
@@ -41,9 +45,11 @@ defmodule SetmyInfo.Commons.Config.Constants do
     [@smi_config_paths, @smi_profiles, @smi_optional_config_files, @smi_name]
   end
 
+  @doc "Base name of the configuration files: `application` (as in `application.yml`)."
   @spec application_file_prefix() :: String.t()
   def application_file_prefix, do: @application_file_prefix
 
+  @doc "`application_file_prefix/0` as a one-element list, for the file discovery's cartesian products."
   @spec application_file_prefixes() :: [String.t()]
   def application_file_prefixes, do: [@application_file_prefix]
 

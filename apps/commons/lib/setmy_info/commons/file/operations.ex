@@ -7,6 +7,10 @@ defmodule SetmyInfo.Commons.File.Operations do
   exception handling at the call site.
   """
 
+  @doc """
+  Whole content of `file_name`, or `error_return` (default `""`) when the
+  file cannot be read for any reason (missing, unreadable, a directory).
+  """
   @spec read_file(Path.t(), String.t()) :: String.t()
   def read_file(file_name, error_return \\ "") do
     case File.read(file_name) do

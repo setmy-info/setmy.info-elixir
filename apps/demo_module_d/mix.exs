@@ -9,7 +9,7 @@ defmodule DemoModuleD.MixProject do
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       description: "Module D - depends on c, the deepest node in the demo dependency graph.",
       package: package(),
       start_permanent: Mix.env() == :live,

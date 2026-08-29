@@ -25,6 +25,13 @@ defmodule SetmyInfo.Commons.Arguments.Parser do
 
   alias SetmyInfo.Commons.Arguments.{Argument, Config, ParsedArguments}
 
+  @doc """
+  Parses `args` (normally `System.argv/0`) against the options declared in
+  `config`. Declared options are cast with their `argument_type` and keyed
+  by `Argument.option_key/1` (last occurrence wins); remaining tokens are
+  positional `arguments`; undeclared options and missing required ones are
+  collected as `errors`; `summary` is the generated help text.
+  """
   @spec parse_arguments([String.t()], Config.t()) :: ParsedArguments.t()
   def parse_arguments(args, %Config{arguments: arguments_config}) do
     {parsed, positional, invalid} =

@@ -1,8 +1,9 @@
 defmodule SetmyInfo.DemoModuleA.ServerTest do
   @moduledoc """
-  Real HTTP requests against the app's own running instance - the Cowboy
-  endpoint supervised by `SetmyInfo.DemoModuleA.Application`, which `mix test`
-  brings up together with the application itself.
+  Real HTTP requests against the app's own running instance: the OTP release
+  daemon started by `mix server.start` (this tier runs with `--no-start`, so
+  nothing listens inside the test VM itself). Requires `mix test.e2e` or an
+  explicit `mix server.start` first.
   """
 
   use ExUnit.Case, async: true

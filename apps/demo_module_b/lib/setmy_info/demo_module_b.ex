@@ -10,11 +10,17 @@ defmodule SetmyInfo.DemoModuleB do
 
   @type descriptor :: %{module: String.t(), message: String.t()}
 
+  @doc """
+  Builds the greeting message published by demo_module_b.
+  """
   @spec create_message() :: String.t()
   def create_message do
     "message from demo_module_b"
   end
 
+  @doc """
+  Logs and returns module b's foo message.
+  """
   @spec foo() :: String.t()
   def foo do
     message = "foo() from demo_module_b"
@@ -22,6 +28,9 @@ defmodule SetmyInfo.DemoModuleB do
     message
   end
 
+  @doc """
+  Builds a descriptor map identifying module b and its message.
+  """
   @spec create_descriptor() :: descriptor()
   def create_descriptor do
     %{module: "b", message: create_message()}
