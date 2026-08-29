@@ -1,3 +1,4 @@
+
 def runCommand(String command) {
     if (isUnix()) {
         sh command
@@ -15,33 +16,49 @@ void publishPackages() {
                 runCommand 'mix cmd mix hex.publish --yes'
             }
         } else {
-            echo 'HEX_API_KEY is not set - skipping mix hex.publish. The Package stage already built every tarball.'
+            echo 'HEX_API_KEY is not set - skipping mix hex.publish. The Build stage already built every tarball.'
         }
     }
 }
 
 pipeline {
 
-    // version 2.0.0 - the Maven-lifecycle emulation was removed. Stages now run plain Mix
-    //                 commands (compile, test.unit/test.integration/test.e2e, format, credo,
-    //                 dialyzer, sobelow, deps.audit, coveralls, docs, hex.build/hex.publish,
-    //                 release) instead of the custom validate/resources/verify/package/sign/
-    //                 sbom/install_local/publish/deploy tasks that used to live in a dev_tasks
-    //                 app. Servers are no longer started and stopped around the test tiers -
-    //                 each app supervises its own HTTP endpoint.
-    // version 1.2.0 - migrated from jenkinsfile-starter's current Jenkinsfile (commit ad074a6):
-    //                 pollSCM trigger, options { buildDiscarder + quietPeriod +
-    //                 disableConcurrentBuilds(abortPrevious: true) }, declarative `when`
-    //                 branch/environment conditions with comparator: 'REGEXP' instead of
-    //                 expression { env.BRANCH_NAME.startsWith(...) }, cross-platform
-    //                 runCommand() helper
-    // version 1.1.0 - hotfix* branch support (Publish/Hotfix candidate stage, HOTFIX_TO_* deploy
-    //                 flags, jenkinsfile-starter 1.1.0), dead MASTER_TO_PRELIVE flag removed
-    // version 1.0.0 - migrated from jenkinsfile-starter for setmy.info-elixir (Mix umbrella,
-    //                 4-app dependency demo). No GitHub Actions workflow: this Jenkinsfile is
-    //                 the one CI definition for the repo.
-
     /*
+    setmy.info-elixir
+    version 2.1.0 - re-synced to jenkinsfile-starter 1.2.0 (commit 379e800): the same stages
+                    and the same steps, in the same order. Only the placeholder commands are
+                    replaced with plain Mix commands (see README.md). The separate Unit /
+                    Integration / E2E / Quality / Coverage and docs / System-Acceptance /
+                    Package / Hotfix candidate stages that 2.0.0 had are folded back into the
+                    starter's Build and Publish stages, where the starter keeps them.
+                    RELEASE_TO_DEV / HOTFIX_TO_DEV flags removed with the starter. The
+                    starter's numbered learning EXAMPLES (variable demo, sleep, retry, timeout,
+                    build-started email) and its PATH setup are left out - build tools are
+                    guaranteed on every Jenkins node.
+    version 2.0.0 - the Maven-lifecycle emulation was removed. Stages run plain Mix commands
+                    (compile, test.unit/test.integration/test.e2e, format, credo, dialyzer,
+                    sobelow, deps.audit, coveralls, docs, hex.build/hex.publish, release)
+                    instead of the custom tasks that used to live in a dev_tasks app. Servers
+                    are no longer started and stopped around the test tiers - each app
+                    supervises its own HTTP endpoint.
+    version 1.2.0 - migrated from jenkinsfile-starter's then-current Jenkinsfile (commit ad074a6)
+    version 1.1.0 - hotfix* branch support, dead MASTER_TO_PRELIVE flag removed
+    version 1.0.0 - migrated from jenkinsfile-starter for setmy.info-elixir (Mix umbrella,
+                    4-app dependency demo). No GitHub Actions workflow: this Jenkinsfile is
+                    this repo's one CI definition.
+
+    jenkinsfile-starter
+    version 1.2.0 - release* no longer deploys to DEV: the RELEASE_TO_DEV flag and the release
+                    branch of the 'dev' deploy stage are gone. release* deploys to TEST and
+                    PRELIVE only. develop -> DEV is unchanged.
+    version 1.1.0 - pollSCM instead of cron (build on new commits, not on a timer),
+                    quietPeriod + disableConcurrentBuilds(abortPrevious: true) so that a burst
+                    of commits becomes one build of the newest change,
+                    elease* added to Publish/Snapshot: develop, release* and hotfix* all publish
+                    a candidate of unknown quality
+                    TEST environment renamed to the ADR-0041 canonical name
+    version 1.0.1 - fileExists precondition check now actually gates (was a discarded boolean)
+
     Git branches flow: develop -> feature -> develop -> release -> master
 
     Building only the newest change
@@ -140,154 +157,159 @@ pipeline {
     }
 
     environment {
-        PATH = "/opt/has/bin:$PATH"
+        // No PATH setup: Elixir/Erlang/Mix are guaranteed on every Jenkins node.
+        // MIX_ENV is deliberately NOT set here: mix.exs' cli/preferred_envs picks the right
+        // Mix env per task (test for the test tiers, dev for the rest), and a global MIX_ENV
+        // would override every one of those.
 
         MASTER_TO_LIVE = 'DEPLOY'
 
         RELEASE_TO_PRELIVE = 'DEPLOY'
         HOTFIX_TO_PRELIVE = 'DEPLOY'
 
-        // "TEST", not "TESTING" - ADR-0041's canonical environment name.
         DEVELOPMENT_TO_TEST = 'DEPLOY'
         RELEASE_TO_TEST = 'DEPLOY'
         HOTFIX_TO_TEST = 'DEPLOY'
 
         DEVELOPMENT_TO_DEV = 'DEPLOY'
-        RELEASE_TO_DEV = 'DEPLOY'
-        // hotfix* deliberately does not reach DEV: DEV is the development integration target
-        // and a hotfix integrates nothing. The flag exists so the exception is visible rather
-        // than implied by a missing condition.
-        HOTFIX_TO_DEV = 'SKIP'
     }
 
     stages {
         stage('Inspection') {
             parallel {
                 stage('Pre-build') {
+                    /*
+                    Stage to get into build logs pre build existing environment conditions, versions, getting CI build
+                    info into log etc.
+                    */
                     steps {
                         echo "Jenkins node: ${env.NODE_NAME}"
                         echo "Operating system: ${isUnix() ? 'Unix/Linux' : 'Windows'}"
 
-                        echo 'Pre build inspection and precondition check.'
                         runCommand 'elixir --version'
-                        // fileExists only RETURNS a boolean - as a bare
-                        // statement its result is discarded and a missing
-                        // file fails nothing. It must be wrapped to gate.
+
+                        runCommand 'mix hex.info'
+
+                        // fileExists only RETURNS a boolean - as a bare statement its result is
+                        // discarded and a missing file fails nothing. It must be wrapped to gate.
                         script {
                             if (!fileExists('README.md')) {
                                 error('README.md missing - checkout incomplete or wrong workspace directory')
                             }
                         }
+
+                        echo 'Pre build inspection and precondition check. Build tools must be installed on the agent.'
                     }
                 }
+                /*
+                Stage to install build required tools. Build dependencies.
+                */
                 stage('Build tools') {
                     steps {
-                        echo 'Build tools installation and preparation (mix deps.get)'
+                        echo 'Build tools installation and preparation (setup, config)'
                         runCommand 'mix local.hex --force'
                         runCommand 'mix local.rebar --force'
-                        runCommand 'mix deps.get'
                     }
                 }
             }
         }
 
-        // Everything from here down to and including 'Package' runs on every branch, feature
-        // branches included - a developer on a feature branch gets the same build/lint/test/
-        // quality feedback as devel/release/master, without ever reaching Publish/Deploy/Tag.
+        stage('Preparation') {
+            parallel {
+                /*
+                Stage to install language and source, language code dependencies.
+                */
+                stage('Install') {
+                    steps {
+                        echo 'Preparing the software to be built. Installation commands go here.'
+                        runCommand 'mix deps.get'
+                        echo 'Put here build configuration commands'
+                        // Nothing to configure: config/ is checked in and mix.exs is the build
+                        // configuration. The lockfile is checked for orphaned entries instead.
+                        runCommand 'mix deps.unlock --check-unused'
+                    }
+                }
+            }
+        }
 
+        /*
+        Stage to build code with with executing all needed steps to measure different type of code quality.
+        */
         stage('Build') {
             steps {
-                echo 'Compile the whole umbrella, warnings are errors.'
+                echo 'Cleaning command, because in some cases shared directories can have previous build garbage'
                 runCommand 'mix clean'
+
+                echo 'Put here resource copy commands'
+                echo 'Nothing to copy: priv/ ships as-is and config/ is read at compile and boot time'
+
+                echo 'Put here compilation commands. Can be omitted.'
+                runCommand 'mix format --check-formatted'
                 runCommand 'mix compile --warnings-as-errors'
-            }
-        }
+                // test-compile: the same compile under the test Mix env, so that test-only
+                // compile errors surface here, before any test tier runs.
+                withEnv(['MIX_ENV=test']) {
+                    runCommand 'mix compile --warnings-as-errors'
+                }
 
-        // The three test tiers run one by one, as separate stages, so a failure names the
-        // tier it happened in. Each app's own supervision tree brings up its HTTP endpoint,
-        // so the integration and e2e tiers need no server started or stopped around them.
-        stage('Unit tests') {
-            steps {
+                echo 'Put here unit tests'
                 runCommand 'mix test.unit'
-            }
-        }
 
-        stage('Integration tests') {
-            steps {
+                echo 'Put here integration tests. Previous steps can be merged here,.'
+                // Tiers are ExUnit tags; each app's own supervision tree brings up its HTTP
+                // endpoint, so nothing is started or stopped around them.
                 runCommand 'mix test.integration'
-            }
-        }
 
-        stage('E2E tests') {
-            steps {
-                runCommand 'mix test.e2e'
-            }
-        }
+                echo 'Put here mutation tests'
+                echo 'Not wired in yet'
 
-        stage('Quality') {
-            parallel {
-                stage('Format and lint') {
-                    steps {
-                        runCommand 'mix format --check-formatted'
-                        runCommand 'mix credo --strict'
-                    }
-                }
-                stage('Types') {
-                    steps {
-                        runCommand 'mix dialyzer'
-                    }
-                }
-                stage('Security') {
-                    steps {
-                        // Static analysis per app, then the dependency advisory audit.
-                        runCommand 'mix sobelow'
-                        runCommand 'mix audit'
-                    }
-                }
-            }
-        }
-
-        stage('Coverage and docs') {
-            steps {
-                echo 'Aggregate coverage over all three tiers, plus the API documentation.'
+                echo 'Put here reporting builds steps can include (unit tests coverage, mutation test coverage, findbugs, vuln. checks, )'
+                echo 'Containing here findbug/stopbug, check style, dependencies vulnreability checks, docs gen, etc'
+                runCommand 'mix credo --strict'
+                runCommand 'mix dialyzer'
+                runCommand 'mix sobelow'
+                runCommand 'mix audit'
                 runCommand 'mix coverage'
                 runCommand 'mix docs'
-            }
-        }
 
-        stage('System/Acceptance') {
-            steps {
+                echo 'Put here site deploy'
+                echo 'Not wired to a target yet - doc/ and cover/ are archived by post { always } below'
+
+                echo 'Put here e2e tests'
+                runCommand 'mix test.e2e'
+
                 echo 'Put here system tests'
                 echo 'Put here acceptance tests'
-            }
-        }
 
-        stage('Package') {
-            steps {
-                echo 'One Hex tarball per app - each app is published separately.'
-                // HEX_BUILD switches the in_umbrella sibling deps to their published Hex
-                // names; see apps/demo_module_c/mix.exs for why it is not always on.
+                echo 'Put here packaging'
+                // One Hex tarball per app. HEX_BUILD switches the in_umbrella sibling deps to
+                // their published Hex names; see apps/demo_module_c/mix.exs for why it is not
+                // always on.
                 withEnv(['HEX_BUILD=1']) {
                     runCommand 'mix cmd mix hex.build'
                 }
+
+                echo 'Put here local publishing'
+                echo 'Nothing to publish locally: Hex has no local repository, the tarballs above are the local result'
             }
         }
 
         // comparator: 'REGEXP' below is not decoration. The default GLOB comparator's `*` does
-        // not cross a `/`, so `branch 'release*'` does NOT match `release/1.2.0` and `branch
-        // 'hotfix*'` does NOT match `hotfix/NPE` - every publish and deployment for those two
-        // branches is then silently skipped. It is easy to miss, because `devel*` keeps working:
-        // `develop` has no separator in it. 'release.*' as a regular expression is what the
-        // earlier expression { env.BRANCH_NAME.startsWith('release') } actually meant. Use
-        // branch 'release/*' instead only if every release branch really is named with a slash.
+        // not cross a `/`, so `branch 'release*'` does NOT match `release/1.2.0` - every publish
+        // and deployment for that branch is then silently skipped. It is easy to miss, because
+        // `devel*` keeps working: `develop` has no separator in it.
         stage('Publish') {
             parallel {
+                /*
+                Stage to push or upload build packages/artifacts to file storage systems.
+                */
                 stage('Release') {
                     when {
                         branch 'master'
+                        // changeset "**/file/to/be/changed"
                     }
                     steps {
-                        echo 'Software release publish steps'
+                        echo 'Put here software release steps'
                         publishPackages()
                     }
                 }
@@ -296,16 +318,7 @@ pipeline {
                         branch pattern: 'devel.*', comparator: 'REGEXP'
                     }
                     steps {
-                        echo 'Software snapshot publish steps'
-                        publishPackages()
-                    }
-                }
-                stage('Hotfix candidate') {
-                    when {
-                        branch pattern: 'hotfix.*', comparator: 'REGEXP'
-                    }
-                    steps {
-                        echo 'Software hotfix-candidate publish steps'
+                        echo 'Put here software snapshot publishing steps'
                         publishPackages()
                     }
                 }
@@ -314,7 +327,8 @@ pipeline {
                         branch 'master'
                     }
                     steps {
-                        echo 'Put here reports publishing steps (deploy doc/ and cover/ output)'
+                        echo 'Put here reports publishing steps'
+                        echo 'Not wired to a target yet - doc/ and cover/ are archived by post { always } below'
                     }
                 }
                 stage('Snapshot reports') {
@@ -322,38 +336,28 @@ pipeline {
                         branch pattern: 'devel.*', comparator: 'REGEXP'
                     }
                     steps {
-                        echo 'Put here reports publishing steps (deploy doc/ and cover/ output)'
+                        echo 'Put here reports publishing steps'
+                        echo 'Not wired to a target yet - doc/ and cover/ are archived by post { always } below'
                     }
                 }
             }
         }
-
         stage('Deploy') {
             parallel {
+                /*
+                Stages to deploy/install artifacts to different environments.
+                One OTP release per app, built for the target environment (`mix release.all`).
+                Installing them on a real host is not wired up yet.
+                withEnv, not a `VAR=value command` shell prefix: that prefix is Bourne-shell
+                syntax and does nothing under bat on a Windows agent.
+                */
                 stage('dev') {
                     when {
-                        anyOf {
-                            allOf {
-                                environment name: 'DEVELOPMENT_TO_DEV', value: 'DEPLOY'
-                                branch pattern: 'devel.*', comparator: 'REGEXP'
-                            }
-                            allOf {
-                                environment name: 'RELEASE_TO_DEV', value: 'DEPLOY'
-                                branch pattern: 'release.*', comparator: 'REGEXP'
-                            }
-                            allOf {
-                                environment name: 'HOTFIX_TO_DEV', value: 'DEPLOY'
-                                branch pattern: 'hotfix.*', comparator: 'REGEXP'
-                            }
-                        }
+                        environment name: 'DEVELOPMENT_TO_DEV', value: 'DEPLOY'
+                        branch pattern: 'devel.*', comparator: 'REGEXP'
                     }
                     steps {
-                        echo 'Development environment installation steps'
-                        // One OTP release per app, built for this environment. Installing
-                        // them on a real host is not wired up yet.
-                        //
-                        // withEnv, not a `VAR=value command` shell prefix: that prefix is
-                        // Bourne-shell syntax and does nothing under bat on a Windows agent.
+                        echo 'Put here software development installations steps'
                         withEnv(['MIX_ENV=dev']) {
                             runCommand 'mix release.all --overwrite'
                         }
@@ -377,9 +381,7 @@ pipeline {
                         }
                     }
                     steps {
-                        echo 'Test environment installation steps'
-                        // One OTP release per app, built for this environment. Installing
-                        // them on a real host is not wired up yet.
+                        echo 'Put here software test installations steps'
                         withEnv(['MIX_ENV=test']) {
                             runCommand 'mix release.all --overwrite'
                         }
@@ -399,9 +401,7 @@ pipeline {
                         }
                     }
                     steps {
-                        echo 'Prelive environment installation steps'
-                        // One OTP release per app, built for this environment. Installing
-                        // them on a real host is not wired up yet.
+                        echo 'Put here software prelive installations steps'
                         withEnv(['MIX_ENV=prelive']) {
                             runCommand 'mix release.all --overwrite'
                         }
@@ -413,9 +413,7 @@ pipeline {
                         branch 'master'
                     }
                     steps {
-                        echo 'Production environment installation steps'
-                        // One OTP release per app, built for this environment. Installing
-                        // them on a real host is not wired up yet.
+                        echo 'Put here software production installations steps'
                         withEnv(['MIX_ENV=live']) {
                             runCommand 'mix release.all --overwrite'
                         }
@@ -423,20 +421,25 @@ pipeline {
                 }
             }
         }
-
+        /*
+        Stage to make SCM tag. As all results are succeeded then tag reflects FULL build success.
+        */
         stage('Tag') {
             when {
                 environment name: 'MASTER_TO_LIVE', value: 'DEPLOY'
                 branch 'master'
             }
             steps {
-                echo 'Put here tagging steps'
+                echo 'Put here tagging. For example: '
+                echo 'smi-new-tag 1.2.3'
+                echo 'And logic to get tag from source files for example.'
             }
         }
     }
 
     post {
         always {
+            // junit '**/target/*-reports/*.xml'
             archiveArtifacts artifacts: 'cover/**, doc/**, apps/*/*.tar', allowEmptyArchive: true, fingerprint: true
         }
 
