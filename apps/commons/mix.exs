@@ -45,6 +45,7 @@ defmodule Commons.MixProject do
     [
       {:yaml_elixir, "~> 2.12"},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:sbom, "~> 0.10", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end

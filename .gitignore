@@ -8,8 +8,8 @@
 # `mix hex.build` leaves <package>-<version>.tar in the app directory
 *.tar
 
-# ExDoc (`mix docs`), ExCoveralls (`mix coverage`), JUnit XML, SBOM and
-# dependency tree (`mix reports`) output
+# ExDoc (`mix docs`), ExCoveralls (`mix coverage`), JUnit XML, SBOM,
+# vulnerability reports and dependency tree (`mix reports`) output
 /doc
 **/doc/
 /cover

@@ -39,15 +39,16 @@ defmodule DemoModuleA.MixProject do
     ]
   end
 
-  # sobelow is declared per app rather than at the umbrella root: it refuses
-  # to run against an umbrella root ("each application should be scanned
-  # separately"), so `mix sobelow` is always run with a single app as the
-  # current project, and a task's binary only resolves against that
-  # project's own deps.
+  # sobelow and sbom are declared per app rather than at the umbrella root:
+  # sobelow refuses to run against an umbrella root ("each application should
+  # be scanned separately") and an SBOM is per artifact, so both always run
+  # with a single app as the current project - and a task's binary only
+  # resolves against that project's own deps.
   defp deps do
     [
       {:plug_cowboy, "~> 2.7"},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:sbom, "~> 0.10", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end

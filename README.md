@@ -54,9 +54,8 @@ printf '#!/bin/sh\nmix format --check-formatted\n' > .git/hooks/pre-commit && ch
 
 The Elixir row of `clj-commons` (`info.setmy.*`) and `python-commons` (`smi_python_commons.*`), implementing the
 architecture index's **"Application configuration"** overload order in full. Clojure is the base implementation -
-`config/application.clj` landed 2023-09-07, `application.py`
-2023-10-06 as a faithful port of it - so where the two disagree, Clojure is followed and the choice is stated in the
-module that makes it.
+`config/application.clj` landed 2023-09-07, `application.py` 2023-10-06 as a faithful port of it - so where the two
+disagree, Clojure is followed and the choice is stated in the module that makes it.
 
 Module names, function names and argument order are kept one-to-one with both:
 
@@ -169,7 +168,6 @@ mix quality            # everything below, in order, as one gate
 | `mix credo --strict` | Credo | style, consistency, refactoring opportunities |
 | `mix dialyzer` | Dialyxir | success typing, across the whole umbrella |
 | `mix xref.cycles` | `mix xref` | module dependency cycles (none allowed) |
-| `mix doctor` | Doctor | documentation coverage: `@moduledoc`, `@doc`, `@spec` on everything public (`.doctor.exs`, 100 %) |
 | `mix sobelow` | Sobelow | static security analysis, per app |
 | `mix audit` | mix_audit + `mix hex.audit` | dependency vulnerability advisories, retired packages |
 
@@ -182,15 +180,12 @@ mix reports            # everything below, in one go
 | Command | Tool | Output |
 |---|---|---|
 | `mix docs` | ExDoc | API documentation, `doc/` |
-| `mix coverage` | ExCoveralls | coverage over all three tiers, HTML for people, `cover/excoveralls.html` (minimum 90 %, `coveralls.json`) |
+| `mix coverage` | ExCoveralls | **test coverage** — every tier (unit, integration, e2e), HTML for people, `cover/excoveralls.html`; the build fails below `minimum_coverage` (90 %, `coveralls.json`) |
 | `mix coverage.xml` | ExCoveralls | the same as SonarQube generic coverage XML, `cover/excoveralls.xml` (standalone, not part of `mix reports`: ExCoveralls accumulates stats per Mix VM, so two coverage runs in one invocation would double-count) |
-| `mix sbom` | sbom | CycloneDX software bill of materials from `mix.lock`, `reports/sbom/bom.xml` |
+| `mix sbom` | sbom | CycloneDX software bill of materials, one per app (each is its own artifact), `reports/sbom/<app>.xml`; `-l prod` scope, with one known leak: the umbrella root's own dev/test toolchain is listed too, because the tool resolves the shared `mix.lock` as a whole |
 | `mix security.reports` | mix_audit, Sobelow | vulnerability reports as JSON, `reports/security/` |
 | *(part of `mix reports`)* | `mix deps.tree` | dependency tree, `reports/deps.tree.txt` |
 | every `mix test*` run | junit_formatter | JUnit XML per app, `reports/junit/` |
-
-Test code is not documented separately: ExUnit test modules are their own specification, and `@moduledoc` on a test
-module is the convention where one is needed (see `apps/commons/test/e2e/environment_variables_test.exs`).
 
 Notes on the two that are not simply the stock invocation:
 
@@ -200,7 +195,8 @@ Notes on the two that are not simply the stock invocation:
   the current project's own dependencies. `--exit medium` gates on medium- and high-confidence findings: reading a
   caller-supplied config path is `commons`' entire job, and Sobelow reports that as a low-confidence
   `Traversal.FileModule` finding. It stays printed; it does not fail the build.
-- **`mix coverage`** is `mix coveralls.html --umbrella --include integration --include e2e`. `--umbrella` aggregates
+- **`mix coverage`** is `mix coveralls.html --umbrella --include integration --include e2e --no-start`, bracketed by
+  `mix server.start` / `mix server.stop` like the tiers it runs. `--umbrella` aggregates
   every app into one report at the root, which is also the only place ExCoveralls looks for `coveralls.json` (it reads
   it from the current directory, and per-app runs happen inside `apps/<name>/`). Each app declares
   `test_coverage: [tool: ExCoveralls]` itself — without it, `mix test --cover` silently falls back to Mix's built-in
@@ -212,12 +208,12 @@ in `mix.exs` for `mix hex.audit` (Hex's own advisory database is broader, so it 
 
 ## Publishing — one package per app
 
-Every app publishes to Hex separately, with `mix hex.publish` run from that app's own directory:
+Every app publishes to Hex separately, with `mix hex.publish package` run from that app's own directory:
 
 ```sh
 cd apps/demo_module_a
 HEX_BUILD=1 mix hex.build          # inspect the tarball first
-HEX_BUILD=1 mix hex.publish
+HEX_BUILD=1 mix hex.publish package
 ```
 
 Or every app at once, from the umbrella root: `HEX_BUILD=1 mix cmd mix hex.build`. Use `mix hex.publish package`
@@ -254,7 +250,7 @@ own `config/<env>.exs`, plus `config/runtime.exs` for values that must come from
 ## CI
 
 `Jenkinsfile` is the single CI definition, kept stage-for-stage in sync with `jenkinsfile-starter` 1.2.0 (no stages
-or steps added or removed, only the placeholders filled): Inspection (pre-build checks ‖ build tools) → Preparation
+added or removed; the starter's learning-example steps are left out, the placeholders filled): Inspection (pre-build checks ‖ build tools) → Preparation
 (`mix deps.get`, `mix deps.unlock --check-unused`) → Build → Publish → Deploy → Tag, with the org's standard branch
 gating (`master` / `devel*` / `release*` / `hotfix*`). The Build stage runs, in order: `mix clean`, format check,
 compile and test-compile (`MIX_ENV=test`) with warnings as errors, the unit tier, the integration tier bracketed by
@@ -262,7 +258,7 @@ compile and test-compile (`MIX_ENV=test`) with warnings as errors, the unit tier
 `HEX_BUILD=1 mix cmd mix hex.build`. Each is its own `mix` line, so the build log names what failed. `post { always }`
 stops any daemons a failed tier left behind, feeds `reports/junit/*.xml` to Jenkins' `junit` step and archives
 `cover/`, `doc/`, `reports/` and the tarballs. Publish (`master` only — Hex has no snapshots, a version publishes
-exactly once, so `devel*` keeps its tarballs as archived artifacts) runs `mix cmd mix hex.publish package --yes` when
+exactly once, so `devel*` keeps its tarballs as archived artifacts) runs `HEX_BUILD=1 mix cmd mix hex.publish package --yes` when
 `HEX_API_KEY` is set (`package`, because the bare form also builds docs with `ex_doc`, a root-only dependency an app
 directory cannot see); Deploy builds the releases with `mix release.all --overwrite` for the target `MIX_ENV`. No
 GitHub Actions workflow.
@@ -271,6 +267,6 @@ GitHub Actions workflow.
 
 A `hotfix*` branch — branched from `master`, one fix, quick review — is a first-class branch case. "Quick" is the human
 review, never the pipeline: a hotfix runs the exact same Inspection → Build path as every other branch (all test
-tiers, quality, packaging), is not published (only `master` and `devel*` publish), and deploys to `test` and `prelive`
-(`HOTFIX_TO_TEST` / `HOTFIX_TO_PRELIVE`). It never deploys `dev` or `live` and never tags — merging it to `master` is
-what does that, through the normal master build.
+tiers, quality, packaging), is not published (only `master` publishes to Hex; `devel*` merely archives its tarballs),
+and deploys to `test` and `prelive` (`HOTFIX_TO_TEST` / `HOTFIX_TO_PRELIVE`). It never deploys `dev` or `live` and
+never tags — merging it to `master` is what does that, through the normal master build.

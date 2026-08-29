@@ -51,9 +51,11 @@ defmodule SetmyInfo.Elixir.MixProject do
   # never compiled as an app, so nothing runtime belongs here. Runtime deps
   # (including `in_umbrella:` siblings) live in each app's own mix.exs.
   #
-  # sobelow is the exception that is NOT here: it refuses to run against an
-  # umbrella root ("each application should be scanned separately"), so it is
-  # declared per app and fanned out with `mix cmd` - see the `sobelow` alias.
+  # sobelow and sbom are the exceptions that are NOT here: both run per app
+  # (sobelow refuses an umbrella root; an SBOM is per artifact), and a task's
+  # binary only resolves against the current project's own deps - so they are
+  # declared in every app's mix.exs and fanned out from the `sobelow` and
+  # `sbom` aliases.
   defp deps do
     [
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -63,12 +65,9 @@ defmodule SetmyInfo.Elixir.MixProject do
       {:excoveralls, "~> 0.18", only: :test, runtime: false},
       # JUnit XML per app for Jenkins' junit step (see each app's test_helper.exs).
       {:junit_formatter, "~> 3.4", only: :test, runtime: false},
-      # Documentation coverage: every public module/function has a doc + spec.
-      {:doctor, "~> 0.23", only: [:dev, :test], runtime: false},
-      # CycloneDX SBOM from mix.lock - the cyclonedx-maven-plugin equivalent.
-      {:sbom, "~> 0.10", only: [:dev, :test], runtime: false},
-      # `mix test.watch` - re-runs the unit tier on every save, dev only.
-      {:mix_test_watch, "~> 1.4", only: :dev, runtime: false}
+      # `mix test.watch` - re-runs the unit tier on every save. Available in
+      # :test too, because that is the env the task itself runs under.
+      {:mix_test_watch, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -88,7 +87,6 @@ defmodule SetmyInfo.Elixir.MixProject do
         "server.stop": :test,
         coverage: :test,
         "coverage.xml": :test,
-        doctor: :dev,
         sbom: :dev,
         reports: :test,
         "security.reports": :dev,
@@ -152,8 +150,14 @@ defmodule SetmyInfo.Elixir.MixProject do
       audit: ["deps.audit --ignore-file .mix_audit_ignore", "hex.audit"],
       # Module dependency cycles are a design smell; none are allowed.
       "xref.cycles": ["xref graph --format cycles --fail-above 0"],
-      # CycloneDX SBOM from mix.lock, into reports/sbom/.
-      sbom: ["sbom.cyclonedx -f -o reports/sbom/bom.xml"],
+      # CycloneDX SBOM, one per app (each app is its own artifact - Hex package
+      # and release), into reports/sbom/<app>.xml, generated from inside each
+      # app directory with `-l prod`. Known limitation: the umbrella shares one
+      # mix.lock, and the sbom tool resolves it as a whole, so the ROOT's
+      # dev/test toolchain (credo, ex_doc, mix_audit, ...) still appears in
+      # every app's SBOM; the app's own `only:` deps (sobelow) are filtered
+      # correctly. `-r` (the tool's umbrella mode) has the same leak.
+      sbom: [&sbom/1],
       # Vulnerability reports as files: mix_audit JSON (dependency advisories)
       # and one Sobelow JSON per app (static security analysis). The `audit`
       # and `sobelow` aliases above are the GATES - these are the documents.
@@ -180,7 +184,6 @@ defmodule SetmyInfo.Elixir.MixProject do
         "credo --strict",
         "dialyzer",
         "xref.cycles",
-        "doctor",
         "sobelow",
         "audit"
       ]
@@ -300,6 +303,29 @@ defmodule SetmyInfo.Elixir.MixProject do
     end
   end
 
+  defp sbom(_args) do
+    dir = Path.expand("reports/sbom")
+    File.mkdir_p!(dir)
+
+    for app <- @deployable_apps ++ [:commons] do
+      out = Path.join(dir, "#{app}.xml")
+
+      case System.cmd(mix_executable(), ["sbom.cyclonedx", "-f", "-l", "prod", "-o", out],
+             cd: Path.join("apps", to_string(app)),
+             env: [{"MIX_ENV", to_string(Mix.env())}],
+             stderr_to_stdout: true
+           ) do
+        {_, 0} ->
+          Mix.shell().info("Wrote #{Path.relative_to_cwd(out)}")
+
+        {output, status} ->
+          Mix.raise("mix sbom.cyclonedx failed for #{app} (exit #{status}):\n#{output}")
+      end
+    end
+  end
+
+  # The tree of the env `reports` runs in (:test) - what CI builds and tests
+  # with, dev-only tooling excluded.
   defp deps_tree(_args) do
     File.mkdir_p!("reports")
 

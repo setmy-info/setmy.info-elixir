@@ -26,12 +26,13 @@ pipeline {
 
     /*
     setmy.info-elixir
+    version 2.2.1 - documentation coverage gate (mix doctor) removed again.
     version 2.2.0 - full toolchain: integration and e2e tiers run against real running
                     instances bracketed by `mix server.start` / `mix server.stop` (OTP release
                     daemons, the failsafe pre-/post-integration-test shape), JUnit XML per app
-                    (junit step enabled), documentation coverage (doctor), dependency cycles
-                    (xref), CycloneDX SBOM, vulnerability reports and the
-                    dependency tree under reports/ (`mix reports`), everything archived.
+                    (junit step enabled), dependency cycles (xref), CycloneDX SBOM, vulnerability
+                    reports (one SBOM per app) and the dependency tree under reports/ (`mix reports`), everything
+                    archived.
     version 2.1.0 - re-synced to jenkinsfile-starter 1.2.0 (commit 379e800): the same stages
                     and the same steps, in the same order. Only the placeholder commands are
                     replaced with plain Mix commands (see README.md). The separate Unit /
@@ -293,7 +294,6 @@ pipeline {
                 runCommand 'mix credo --strict'
                 runCommand 'mix dialyzer'
                 runCommand 'mix xref.cycles'
-                runCommand 'mix doctor'
                 runCommand 'mix sobelow'
                 runCommand 'mix audit'
                 // `mix reports`: ExDoc API docs (doc/), coverage over all three tiers as HTML
@@ -301,7 +301,9 @@ pipeline {
                 // the dependency tree (reports/). Coverage runs the tiers itself, with the same
                 // server lifecycle around them. (`mix coverage.xml` gives the SonarQube generic
                 // XML instead, when a Sonar step is wired in.)
-                withEnv(['JUNIT_REPORT_FILE=coverage.xml']) {
+                // The coverage run inside `mix reports` re-runs every tier; its JUnit output
+                // goes to a file the junit step below does not read, so no test is counted twice.
+                withEnv(['JUNIT_REPORT_FILE=coverage-run.xml']) {
                     runCommand 'mix reports'
                 }
 
@@ -482,8 +484,12 @@ pipeline {
     post {
         always {
             // Stops the release daemons a failed integration/e2e tier left behind; idempotent.
-            runCommand 'mix server.stop'
-            junit allowEmptyResults: true, testResults: 'reports/junit/*.xml'
+            // catchError: if the build died before deps were even fetched, this alias cannot
+            // compile - that must not hide the junit and archive steps after it.
+            catchError(buildResult: null, stageResult: null) {
+                runCommand 'mix server.stop'
+            }
+            junit allowEmptyResults: true, testResults: 'reports/junit/*-unit.xml, reports/junit/*-integration.xml, reports/junit/*-e2e.xml'
             archiveArtifacts artifacts: 'cover/**, doc/**, reports/**, apps/*/*.tar', allowEmptyArchive: true, fingerprint: true
         }
 

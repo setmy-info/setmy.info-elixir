@@ -50,6 +50,7 @@ defmodule DemoModuleC.MixProject do
       sibling(:demo_module_b, :setmy_info_demo_module_b),
       {:plug_cowboy, "~> 2.7"},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:sbom, "~> 0.10", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end
@@ -71,7 +72,7 @@ defmodule DemoModuleC.MixProject do
   # So `:hex` is added only when HEX_BUILD is set, which is exactly when a
   # package is being built:
   #
-  #     HEX_BUILD=1 mix hex.publish
+  #     HEX_BUILD=1 mix hex.publish package
   defp sibling(app, hex_package) do
     if System.get_env("HEX_BUILD") in [nil, ""] do
       {app, "~> 1.0", in_umbrella: true}
