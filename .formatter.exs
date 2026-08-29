@@ -1,9 +1,6 @@
+# Umbrella root: format the root files here and delegate every app to its own
+# .formatter.exs, the way `mix new --umbrella` sets it up.
 [
-  inputs: [
-    "{mix,.formatter}.exs",
-    "{config,lib,test}/**/*.{ex,exs}",
-    "apps/*/{mix,.formatter}.exs",
-    "apps/*/lib/**/*.{ex,exs}",
-    "apps/*/test/**/*.{ex,exs}"
-  ]
+  inputs: ["{mix,.formatter}.exs", "config/*.exs"],
+  subdirectories: ["apps/*"]
 ]

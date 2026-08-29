@@ -13,7 +13,6 @@ defmodule DemoModuleD.MixProject do
       description: "Module D - depends on c, the deepest node in the demo dependency graph.",
       package: package(),
       start_permanent: Mix.env() == :live,
-      elixirc_paths: elixirc_paths(Mix.env()),
       # Declared per app, not only at the umbrella root: `mix test --cover`
       # runs with each app as the current project, and without this it falls
       # back to Mix's built-in cover tool instead of ExCoveralls.
@@ -79,6 +78,4 @@ defmodule DemoModuleD.MixProject do
       {app, "~> 1.0", in_umbrella: true, hex: hex_package}
     end
   end
-
-  defp elixirc_paths(_), do: ["lib"]
 end

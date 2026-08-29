@@ -195,10 +195,6 @@ pipeline {
         // branches included - a developer on a feature branch gets the same build/lint/test/
         // quality feedback as devel/release/master, without ever reaching Publish/Deploy/Tag.
 
-        // Everything from here down to and including 'Package' runs on every branch, feature
-        // branches included - a developer on a feature branch gets the same build/lint/test/
-        // quality feedback as devel/release/master, without ever reaching Publish/Deploy/Tag.
-
         stage('Build') {
             steps {
                 echo 'Compile the whole umbrella, warnings are errors.'

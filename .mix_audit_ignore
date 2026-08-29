@@ -25,9 +25,10 @@ EEF-CVE-2026-43969
 # this repo actually uses cowlib: the vulnerable path requires an
 # application to pass attacker-controlled data into the low-level
 # cow_http_struct_hd:item/1 structured-header builder directly, which
-# neither Mix.Tasks.Server's StaticServerPlug nor Plug.Static do (they
-# never construct custom structured HTTP headers from request input at
-# all). The advisory itself also notes cowboy >= 2.16.0 already rejects
-# CR/LF in outgoing header values by default via `invalid_response_headers`
-# - we're on cowboy 2.17.0, so that default protection applies regardless.
+# the demo apps' SetmyInfo.DemoModule*.Web plugs never do (they serve a
+# static page and never construct custom structured HTTP headers from
+# request input at all). The advisory itself also notes cowboy >= 2.16.0
+# already rejects CR/LF in outgoing header values by default via
+# `invalid_response_headers` - we're on cowboy 2.17.0, so that default
+# protection applies regardless.
 EEF-CVE-2026-43966

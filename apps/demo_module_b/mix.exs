@@ -13,7 +13,6 @@ defmodule DemoModuleB.MixProject do
       description: "Module B - the typed worked example: full @spec coverage, Dialyzer-checked.",
       package: package(),
       start_permanent: Mix.env() == :live,
-      elixirc_paths: elixirc_paths(Mix.env()),
       # Declared per app, not only at the umbrella root: `mix test --cover`
       # runs with each app as the current project, and without this it falls
       # back to Mix's built-in cover tool instead of ExCoveralls.
@@ -52,6 +51,4 @@ defmodule DemoModuleB.MixProject do
       {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end
-
-  defp elixirc_paths(_), do: ["lib"]
 end
