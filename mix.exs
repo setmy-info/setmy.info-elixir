@@ -1,5 +1,14 @@
+# The project-specific pre/post steps of the test lifecycle live next door;
+# this file only defines the phases. See lifecycle.exs.
+Code.require_file("lifecycle.exs", __DIR__)
+
 defmodule SetmyInfo.Elixir.MixProject do
   use Mix.Project
+
+  alias SetmyInfo.Elixir.Lifecycle
+
+  @tiers [:integration, :e2e]
+  @all_tiers_args ["--include", "integration", "--include", "e2e", "--no-start"]
 
   def project do
     [
@@ -83,6 +92,12 @@ defmodule SetmyInfo.Elixir.MixProject do
         "test.integration": :test,
         "test.e2e": :test,
         "test.all": :test,
+        # The lifecycle phases and their steps run in the tiers' env also when
+        # invoked on their own, so the releases they build are the test ones.
+        "pre-integration-test": :test,
+        "post-integration-test": :test,
+        "pre-e2e-test": :test,
+        "post-e2e-test": :test,
         "server.start": :test,
         "server.stop": :test,
         coverage: :test,
@@ -106,26 +121,32 @@ defmodule SetmyInfo.Elixir.MixProject do
   # working unchanged, and adding or removing an app needs no edit here.
   # The directory split under test/ is kept purely for readability.
   #
-  # The integration and e2e tiers run against REAL RUNNING INSTANCES, the way
-  # Maven's failsafe brackets integration-test with pre-/post-integration-test:
-  # `server.start` builds every deployable app's OTP release for the test env
-  # and starts it as a daemon (`bin/<app> daemon`), the tier runs with
-  # `--no-start` so the test VM does not bring up a second copy on the same
-  # port, and `server.stop` shuts the daemons down (`bin/<app> stop`). So what
-  # the e2e tier exercises is the release artifact itself - what gets
-  # deployed - not the code hosted inside the test runner. Mix stops an alias
-  # at the first failing task, so a failing tier leaves the daemons running;
-  # `server.stop` is idempotent and CI calls it again in post { always }.
+  # The integration and e2e tiers are LIFECYCLE PHASES in the Maven failsafe
+  # sense - pre-integration-test / integration-test / post-integration-test,
+  # and the same for e2e. This file defines only the phases and their
+  # contract: every pre step runs before the tier, every post step runs after
+  # it, and the post steps ALWAYS run, also when the tier fails (`bracket/3`).
+  # What the steps are is the project's business and is declared in
+  # lifecycle.exs. Currently they start and stop the deployable apps' OTP
+  # releases as daemons (`server.start` / `server.stop` below), so that the
+  # tiers - run with `--no-start`, so the test VM brings up no second copy on
+  # the same port - exercise the release artifact itself, what gets deployed,
+  # and not the code hosted inside the test runner.
+  #
+  # Each phase is also a task of its own (`mix pre-e2e-test`, ...), for CI
+  # that wants each step to be its own line in the build log.
   defp aliases do
     [
       "test.unit": ["test"],
-      "test.integration": ["server.start", "test --only integration --no-start", "server.stop"],
-      "test.e2e": ["server.start", "test --only e2e --no-start", "server.stop"],
-      "test.all": [
-        "server.start",
-        "test --include integration --include e2e --no-start",
-        "server.stop"
+      "pre-integration-test": Lifecycle.steps(:pre_integration_test),
+      "post-integration-test": Lifecycle.steps(:post_integration_test),
+      "pre-e2e-test": Lifecycle.steps(:pre_e2e_test),
+      "post-e2e-test": Lifecycle.steps(:post_e2e_test),
+      "test.integration": [
+        bracket([:integration], "test", ["--only", "integration", "--no-start"])
       ],
+      "test.e2e": [bracket([:e2e], "test", ["--only", "e2e", "--no-start"])],
+      "test.all": [bracket(@tiers, "test", @all_tiers_args)],
       "server.start": [&servers_start/1],
       "server.stop": [&servers_stop/1],
       # --umbrella aggregates every app's stats into one report at the root,
@@ -135,16 +156,8 @@ defmodule SetmyInfo.Elixir.MixProject do
       # the SonarQube generic test-coverage XML - standalone on purpose:
       # ExCoveralls accumulates stats for the life of one Mix VM, so two
       # coverage runs in one invocation would double-count the second.
-      coverage: [
-        "server.start",
-        "coveralls.html --umbrella --include integration --include e2e --no-start",
-        "server.stop"
-      ],
-      "coverage.xml": [
-        "server.start",
-        "coveralls.xml --umbrella --include integration --include e2e --no-start",
-        "server.stop"
-      ],
+      coverage: [bracket(@tiers, "coveralls.html", ["--umbrella" | @all_tiers_args])],
+      "coverage.xml": [bracket(@tiers, "coveralls.xml", ["--umbrella" | @all_tiers_args])],
       # Dependency advisories (mix_audit) plus retired/deprecated packages
       # (hex.audit) - the OWASP dependency-check + versions-plugin pair.
       audit: ["deps.audit --ignore-file .mix_audit_ignore", "hex.audit"],
@@ -188,6 +201,38 @@ defmodule SetmyInfo.Elixir.MixProject do
         "audit"
       ]
     ]
+  end
+
+  # Runs `task` inside the lifecycle of the given tiers: all their pre steps,
+  # the task, then all their post steps - the post steps in a `try/after`, so
+  # a failing task (a Mix.raise, a compile error) cannot leave them unrun.
+  # (A failing `mix test` itself only records a non-zero exit status; it does
+  # not raise, so the post steps run there anyway.) When more than one tier is
+  # bracketed, a step shared by their pre (or post) phases runs once.
+  defp bracket(tiers, task, task_args) do
+    fn args ->
+      run_steps(tiers, :pre)
+
+      try do
+        Mix.Task.rerun(task, task_args ++ args)
+      after
+        run_steps(tiers, :post)
+      end
+    end
+  end
+
+  defp run_steps(tiers, pre_or_post) do
+    tiers
+    |> Enum.flat_map(&Lifecycle.steps(:"#{pre_or_post}_#{&1}_test"))
+    |> Enum.uniq()
+    |> Enum.each(&run_step/1)
+  end
+
+  defp run_step(fun) when is_function(fun, 1), do: fun.([])
+
+  defp run_step(step) when is_binary(step) do
+    [task | args] = OptionParser.split(step)
+    Mix.Task.rerun(task, args)
   end
 
   # One OTP release per deployable app, so a module is deployed on its own

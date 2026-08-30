@@ -29,7 +29,7 @@ Each demo app is a real OTP application: its `mod:` callback starts a supervisio
 serving that app's `priv/web/index.html` on its own port (`48101`/`48111`/`48121`/`48131` for a/b/c/d, set in
 `config/config.exs`). Anything that starts the application gets the endpoint — `iex -S mix`, `mix run --no-halt`, or the
 release. In the integration and e2e tiers, though, the test VM runs with `--no-start` and the HTTP requests go to the
-release daemons brought up by `mix server.start` (see "Tests").
+release daemons brought up by the pre steps of `lifecycle.exs` (see "Tests").
 
 ## Getting started
 
@@ -116,22 +116,61 @@ matching `@moduletag`. That keeps `mix test`'s own umbrella recursion doing the 
 no change anywhere — and makes a bare `mix test` the fast one. The directory split under `test/` is kept for
 readability.
 
-### Integration and e2e run against real running instances
+### Running exactly one tier, file or test
 
-The integration and e2e tiers are bracketed by **pre and post steps**, the shape of Maven failsafe's
-`pre-integration-test` / `integration-test` / `post-integration-test`:
+The tier is chosen by tag, the scope by path (from the umbrella root — Mix maps `apps/<name>/...` to the right app)
+and, optionally, a `:line` suffix for one test:
 
 ```sh
-mix server.start                          # build every app's OTP release (test env) and start it as a daemon
-mix test --only e2e --no-start            # the tier, against the daemons; --no-start: no second copy in the test VM
-mix server.stop                           # stop the daemons; idempotent
+mix test                                                        # unit tier, every app
+mix test apps/demo_module_c/test/unit/demo_probe_test.exs       # unit tier, one file
+mix test apps/demo_module_c/test/unit/demo_probe_test.exs:10    # one test, by line
+
+mix pre-integration-test                                        # integration tier needs the instances up
+mix test --only integration --no-start                          # every app
+mix test apps/demo_module_c/test/integration/demo_module_c_test.exs --only integration --no-start
+mix post-integration-test
+
+mix pre-e2e-test                                                # e2e: the same shape
+mix test apps/demo_module_c/test/e2e/demo_probe_e2e_test.exs --only e2e --no-start
+mix post-e2e-test
 ```
 
-`mix test.integration` / `mix test.e2e` / `mix test.all` / `mix coverage` are exactly those three steps as one alias.
-What the e2e tier exercises is therefore the **release artifact** — what gets deployed — not code hosted inside the test
-runner. `server.start` waits until every port answers, and first stops anything a previous aborted run left behind. Mix
-stops an alias at the first failing task, so after a failing tier run `mix server.stop` yourself (CI does it in
-`post { always }`).
+`--only <tag>` is what lets the excluded tier back in for that run, and `--no-start` keeps the test VM from opening
+the ports the daemons already hold. A file under `test/integration/` or `test/e2e/` without the matching
+`--only` runs nothing ("All tests have been excluded"). The pre and post phases are explained next.
+
+### Integration and e2e run against real running instances
+
+The integration and e2e tiers are **lifecycle phases** in the Maven failsafe sense:
+
+```
+pre-integration-test  →  integration-test  →  post-integration-test
+pre-e2e-test          →  e2e-test          →  post-e2e-test
+```
+
+The umbrella's `mix.exs` defines only the phases and their contract: every pre step runs before the tier, every post
+step runs after it, and the post steps **always** run — also when the tier fails. **What** the pre and post steps do is
+the project's business and is declared in one place, **`lifecycle.exs`**, as a list of steps per phase (a Mix task
+invocation as a string, or a function). From the point of view of the tiers and of CI there is only "pre" and "post";
+a project built on this umbrella puts whatever its tiers need there — a database, a broker, a mock of a third-party
+API, seed data — next to or instead of the current steps.
+
+Currently the steps are `server.start` / `server.stop`: build every deployable app's OTP release for the test env and
+start it as a daemon, and stop the daemons again (idempotent). The tiers run with `--no-start`, so the test VM brings
+up no second copy on the same port. What the tiers exercise is therefore the **release artifact** — what gets deployed
+— not code hosted inside the test runner. `server.start` waits until every port answers, and first stops anything a
+previous aborted run left behind.
+
+```sh
+mix test.e2e              # == pre-e2e-test, mix test --only e2e --no-start, post-e2e-test
+mix pre-e2e-test          # each phase is also a task of its own, for a CI log with one line per step
+mix test --only e2e --no-start
+mix post-e2e-test
+```
+
+`mix test.integration` / `mix test.e2e` / `mix test.all` / `mix coverage` are the bracketed tiers; when one run covers
+both tiers, a step shared by their pre (or post) phases runs once.
 
 Inside a release only the release's own app opens its endpoint: `demo_module_c`'s release also starts `a` and `b`
 (Mix will not let a `:permanent` app's dependencies be merely loaded), but there they are libraries, and a second copy
@@ -196,9 +235,9 @@ Notes on the two that are not simply the stock invocation:
   caller-supplied config path is `commons`' entire job, and Sobelow reports that as a low-confidence
   `Traversal.FileModule` finding. It stays printed; it does not fail the build.
 - **`mix coverage`** is `mix coveralls.html --umbrella --include integration --include e2e --no-start`, bracketed by
-  `mix server.start` / `mix server.stop` like the tiers it runs. `--umbrella` aggregates every app into one report at
-  the root, which is also the only place ExCoveralls looks for `coveralls.json` (it reads it from the current directory,
-  and per-app runs happen inside `apps/<name>/`). Each app declares
+  the pre and post steps of both tiers (`lifecycle.exs`) like the tiers it runs. `--umbrella` aggregates every app into
+  one report at the root, which is also the only place ExCoveralls looks for `coveralls.json` (it reads it from the
+  current directory, and per-app runs happen inside `apps/<name>/`). Each app declares
   `test_coverage: [tool: ExCoveralls]` itself — without it, `mix test --cover` silently falls back to Mix's built-in
   cover tool for that app.
 
@@ -255,9 +294,11 @@ checks ‖ build tools) → Preparation (`mix deps.get`, `mix deps.unlock --chec
 with the org's standard branch gating (`master` / `devel*` / `release*` / `hotfix*`). The Build stage runs, in order:
 `mix clean`, format check, compile and test-compile (`MIX_ENV=test`) with warnings as errors, the unit tier, the
 integration tier bracketed by
-`mix server.start` / `mix server.stop`, the quality gates, `mix reports`, the e2e tier bracketed the same way, and
+`mix pre-integration-test` / `mix post-integration-test`, the quality gates, `mix reports`, the e2e tier bracketed by
+`mix pre-e2e-test` / `mix post-e2e-test`, and
 `HEX_BUILD=1 mix cmd mix hex.build`. Each is its own `mix` line, so the build log names what failed. `post { always }`
-stops any daemons a failed tier left behind, feeds `reports/junit/*.xml` to Jenkins' `junit` step and archives
+runs both post phases again for anything a failed tier left behind, feeds `reports/junit/*.xml` to Jenkins' `junit`
+step and archives
 `cover/`, `doc/`, `reports/` and the tarballs. Publish (`master` only — Hex has no snapshots, a version publishes
 exactly once, so `devel*` keeps its tarballs as archived artifacts) runs
 `HEX_BUILD=1 mix cmd mix hex.publish package --yes` when

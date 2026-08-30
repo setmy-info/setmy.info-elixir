@@ -25,5 +25,9 @@ erl_crash.dump
 .elixir_ls/
 .lexical/
 .idea/
+*.iml
 .lsp/
 .vscode/
+
+claude.session.sh
+claude.session.cmd

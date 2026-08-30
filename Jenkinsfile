@@ -26,6 +26,9 @@ pipeline {
 
     /*
     setmy.info-elixir
+    version 2.3.0 - integration and e2e tiers are lifecycle phases: CI runs
+                    `mix pre-/post-integration-test` and `mix pre-/post-e2e-test`; what those
+                    do is declared per project in lifecycle.exs (currently: the release daemons).
     version 2.2.1 - documentation coverage gate (mix doctor) removed again.
     version 2.2.0 - full toolchain: integration and e2e tiers run against real running
                     instances bracketed by `mix server.start` / `mix server.stop` (OTP release
@@ -274,16 +277,18 @@ pipeline {
 
                 echo 'Put here integration tests. Previous steps can be merged here.'
                 // pre-integration-test / integration-test / post-integration-test, the way
-                // Maven's failsafe brackets them: the releases are built and started as
-                // daemons, the tier runs against them (--no-start: no second copy in the test
-                // VM), the daemons are stopped. `mix test.integration` is the same three in one
-                // alias; spelled out here so each is its own line in the build log. A failing
-                // tier leaves the daemons up - post { always } below stops them.
-                runCommand 'mix server.start'
+                // Maven's failsafe brackets them. What the pre and post phases do is the
+                // project's business, declared in lifecycle.exs (currently: build the releases
+                // and start them as daemons / stop them); CI only knows the phases. The tier
+                // runs against whatever pre set up (--no-start: no second copy in the test
+                // VM). `mix test.integration` is the same three in one alias; spelled out
+                // here so each is its own line in the build log. A failing tier leaves pre's
+                // work in place - post { always } below runs the post phases again.
+                runCommand 'mix pre-integration-test'
                 withEnv(['JUNIT_REPORT_FILE=integration.xml']) {
                     runCommand 'mix test --only integration --no-start'
                 }
-                runCommand 'mix server.stop'
+                runCommand 'mix post-integration-test'
 
                 echo 'Put here mutation tests'
                 echo 'Not wired in yet'
@@ -312,11 +317,11 @@ pipeline {
 
                 echo 'Put here e2e tests'
                 // pre-e2e-test / e2e / post-e2e-test, same shape as the integration tier.
-                runCommand 'mix server.start'
+                runCommand 'mix pre-e2e-test'
                 withEnv(['JUNIT_REPORT_FILE=e2e.xml']) {
                     runCommand 'mix test --only e2e --no-start'
                 }
-                runCommand 'mix server.stop'
+                runCommand 'mix post-e2e-test'
 
                 echo 'Put here system tests'
                 echo 'Put here acceptance tests'
@@ -483,11 +488,13 @@ pipeline {
 
     post {
         always {
-            // Stops the release daemons a failed integration/e2e tier left behind; idempotent.
-            // catchError: if the build died before deps were even fetched, this alias cannot
-            // compile - that must not hide the junit and archive steps after it.
+            // The post phases once more, for what a failed integration/e2e tier left behind
+            // (the steps are idempotent - see lifecycle.exs). catchError: if the build died
+            // before deps were even fetched, these aliases cannot compile - that must not
+            // hide the junit and archive steps after them.
             catchError(buildResult: null, stageResult: null) {
-                runCommand 'mix server.stop'
+                runCommand 'mix post-integration-test'
+                runCommand 'mix post-e2e-test'
             }
             junit allowEmptyResults: true, testResults: 'reports/junit/*-unit.xml, reports/junit/*-integration.xml, reports/junit/*-e2e.xml'
             archiveArtifacts artifacts: 'cover/**, doc/**, reports/**, apps/*/*.tar', allowEmptyArchive: true, fingerprint: true

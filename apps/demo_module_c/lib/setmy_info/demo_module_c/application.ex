@@ -7,8 +7,9 @@ defmodule SetmyInfo.DemoModuleC.Application do
   `mod:` callback, the endpoint is running for anything that starts the
   application - `iex -S mix` and `mix run --no-halt` alike. The integration
   and e2e tiers run with `--no-start` against this app's own OTP release,
-  started by `mix server.start`; see `config/runtime.exs` for why only the
-  release's own app serves there.
+  started by the tiers' pre step (`mix server.start`, see the umbrella's
+  lifecycle.exs); see `config/runtime.exs` for why only the release's own app
+  serves there.
   """
 
   use Application
