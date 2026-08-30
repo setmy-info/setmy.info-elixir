@@ -15,12 +15,12 @@ defmodule SetmyInfo.Commons.Arguments.Argument do
     defstruct [:name, :short_flag, :argument_type, argument_help: "", required: false]
 
     @type t :: %__MODULE__{
-                    name: String.t(),
-                    short_flag: String.t() | nil,
-                    argument_type: (String.t() -> term()) | nil,
-                    argument_help: String.t(),
-                    required: boolean()
-                }
+            name: String.t(),
+            short_flag: String.t() | nil,
+            argument_type: (String.t() -> term()) | nil,
+            argument_help: String.t(),
+            required: boolean()
+          }
 
     @doc """
     Builds an option declaration. `name` is the long flag without the leading
@@ -30,7 +30,7 @@ defmodule SetmyInfo.Commons.Arguments.Argument do
     is reported as an error by the parser.
     """
     @spec new(String.t(), String.t() | nil, (String.t() -> term()) | nil, String.t(), boolean()) ::
-                    t()
+            t()
     def new(name, short_flag, argument_type \\ nil, argument_help \\ "", required \\ false) do
         %__MODULE__{
             name: name,

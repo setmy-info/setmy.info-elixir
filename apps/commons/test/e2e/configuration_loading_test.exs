@@ -46,7 +46,7 @@ defmodule SetmyInfo.Commons.ConfigurationLoadingE2eTest do
 
         # 4. optional files, environment's then CLI's - CLI wins on the shared key
         assert ConfigApplication.get(app, ["a", "k", "l"]) ==
-                          "Some optional value from CLI optional yaml"
+                 "Some optional value from CLI optional yaml"
 
         # 5. environment variables override configured values
         assert ConfigApplication.get(app, ["smi", "server", "host"]) == "env.setmy.info"

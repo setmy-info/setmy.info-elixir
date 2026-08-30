@@ -22,7 +22,7 @@ defmodule SetmyInfo.Commons.Collection.OperationsTest do
 
     test "product_as_pairs/2 yields every combination as a tuple" do
         assert Operations.product_as_pairs(["A", "B"], ["X", "Y"]) ==
-                          [{"A", "X"}, {"A", "Y"}, {"B", "X"}, {"B", "Y"}]
+                 [{"A", "X"}, {"A", "Y"}, {"B", "X"}, {"B", "Y"}]
 
         assert Operations.product_as_pairs(["A"], []) == []
     end

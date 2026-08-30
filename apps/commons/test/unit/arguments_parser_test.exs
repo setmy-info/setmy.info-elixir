@@ -35,9 +35,9 @@ defmodule SetmyInfo.Commons.Arguments.ParserTest do
             parsed = Parser.parse_arguments(args, config)
 
             assert parsed.options == %{
-                              smi_profiles: ["profile1", "profile2"],
-                              smi_config_paths: ["./src/test/resourses", "./src/main/resourses"]
-                          }
+                     smi_profiles: ["profile1", "profile2"],
+                     smi_config_paths: ["./src/test/resourses", "./src/main/resourses"]
+                   }
 
             # clj-commons gets ["sub-command" "input.txt" "output.txt"] here:
             # `clojure.tools.cli` keeps the token after an undeclared option as a
@@ -45,16 +45,16 @@ defmodule SetmyInfo.Commons.Arguments.ParserTest do
             assert parsed.arguments == ["sub-command"]
 
             assert parsed.errors == [
-                              {:unknown_option, "-i"},
-                              {:unknown_option, "-o"},
-                              {:missing_required, "--another-other"}
-                          ]
+                     {:unknown_option, "-i"},
+                     {:unknown_option, "-o"},
+                     {:missing_required, "--another-other"}
+                   ]
 
             assert ParsedArguments.format_errors(parsed) == [
-                              ~s(Unknown option: "-i"),
-                              ~s(Unknown option: "-o"),
-                              ~s(Missing required option: "--another-other")
-                          ]
+                     ~s(Unknown option: "-i"),
+                     ~s(Unknown option: "-o"),
+                     ~s(Missing required option: "--another-other")
+                   ]
         end
 
         test "parses declared options by short flag and long flag (python-commons parity)" do
@@ -98,7 +98,7 @@ defmodule SetmyInfo.Commons.Arguments.ParserTest do
     describe "find_option_value/2" do
         test "finds both --flag value and --flag=value forms" do
             assert Parser.find_option_value(["--smi-server-port", "9090"], "--smi-server-port") ==
-                              "9090"
+                     "9090"
 
             assert Parser.find_option_value(["--smi-server-port=9090"], "--smi-server-port") == "9090"
         end
@@ -111,7 +111,7 @@ defmodule SetmyInfo.Commons.Arguments.ParserTest do
 
         test "a flag with no value, a missing flag and a prefix-only match yield nil" do
             assert Parser.find_option_value(["--smi-server-port", "--other"], "--smi-server-port") ==
-                              nil
+                     nil
 
             assert Parser.find_option_value(["--smi-server-port"], "--smi-server-port") == nil
             assert Parser.find_option_value(["--other", "x"], "--smi-server-port") == nil

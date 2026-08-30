@@ -8,8 +8,8 @@ defmodule SetmyInfo.DemoModuleA.E2eTest do
         assert SetmyInfo.DemoModuleA.foo() == "foo() from demo_module_a"
 
         assert SetmyInfo.DemoModuleA.create_descriptor() == %{
-                          module: "a",
-                          message: "message from demo_module_a"
-                      }
+                 module: "a",
+                 message: "message from demo_module_a"
+               }
     end
 end

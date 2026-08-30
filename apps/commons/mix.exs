@@ -23,6 +23,9 @@ defmodule Commons.MixProject do
             # test/support/ holds the shared ExUnit.CaseTemplate, required from
             # test_helper.exs rather than loaded as a test file.
             test_ignore_filters: [~r"^test/support/"],
+            # formatter/ holds the umbrella's `mix format` plugin - compiled with
+            # the app so `mix format` finds it, kept out of package files: below.
+            elixirc_paths: ["lib", "formatter"],
             deps: deps()
         ]
     end

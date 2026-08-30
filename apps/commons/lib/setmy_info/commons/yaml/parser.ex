@@ -18,9 +18,9 @@ defmodule SetmyInfo.Commons.Yaml.Parser do
     alias SetmyInfo.Commons.File.Operations, as: FileOperations
 
     @type post_actions :: %{
-                    optional(:post_read_function) => (String.t() -> String.t()),
-                    optional(:post_parse_function) => (term() -> term())
-                }
+            optional(:post_read_function) => (String.t() -> String.t()),
+            optional(:post_parse_function) => (term() -> term())
+          }
 
     @doc """
     Reads and parses a YAML file. `post_actions` may carry

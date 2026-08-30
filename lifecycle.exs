@@ -25,7 +25,7 @@ defmodule SetmyInfo.Elixir.Lifecycle do
     @type step :: String.t() | (OptionParser.argv() -> any())
 
     @spec steps(:pre_integration_test | :post_integration_test | :pre_e2e_test | :post_e2e_test) ::
-                    [step()]
+            [step()]
     def steps(:pre_integration_test), do: ["server.start"]
     def steps(:post_integration_test), do: ["server.stop"]
 

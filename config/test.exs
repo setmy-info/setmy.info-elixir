@@ -13,3 +13,12 @@ config :junit_formatter,
     prepend_project_name?: true,
     include_filename?: true,
     automatic_create_dir?: true
+
+# `mix test` starts every app in the test VM (unit tier, `mix test <file>`,
+# test.watch). Nothing there needs the endpoints, and binding the ports would
+# collide with the release daemons the integration and e2e tiers talk to
+# (those tiers run with --no-start anyway). The daemons themselves get
+# `serve: true` for their own app from config/runtime.exs, which runs later.
+for app <- [:demo_module_a, :demo_module_b, :demo_module_c, :demo_module_d] do
+    config app, serve: false
+end

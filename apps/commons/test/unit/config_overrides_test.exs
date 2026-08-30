@@ -29,13 +29,13 @@ defmodule SetmyInfo.Commons.Config.OverridesTest do
     describe "leaf_paths/2" do
         test "finds every non-map leaf under the allowed roots" do
             assert Enum.sort(Overrides.leaf_paths(@config, ["smi"])) == [
-                              ["smi", "apiBaseUrl"],
-                              ["smi", "hosts"],
-                              ["smi", "server", "host"],
-                              ["smi", "server", "port"],
-                              ["smi", "server", "secure"],
-                              ["smi", "xyz"]
-                          ]
+                     ["smi", "apiBaseUrl"],
+                     ["smi", "hosts"],
+                     ["smi", "server", "host"],
+                     ["smi", "server", "port"],
+                     ["smi", "server", "secure"],
+                     ["smi", "xyz"]
+                   ]
         end
 
         test "nil root_keys allows every root" do
@@ -50,22 +50,22 @@ defmodule SetmyInfo.Commons.Config.OverridesTest do
     describe "name derivation" do
         test "environment variable names cover both the split and run-together forms" do
             assert Overrides.environment_variable_names(["smi", "server", "port"]) == [
-                              "SMI_SERVER_PORT"
-                          ]
+                     "SMI_SERVER_PORT"
+                   ]
 
             assert Overrides.environment_variable_names(["smi", "apiBaseUrl"]) == [
-                              "SMI_API_BASE_URL",
-                              "SMI_APIBASEURL"
-                          ]
+                     "SMI_API_BASE_URL",
+                     "SMI_APIBASEURL"
+                   ]
         end
 
         test "CLI option names cover both forms" do
             assert Overrides.cli_option_names(["smi", "server", "port"]) == ["--smi-server-port"]
 
             assert Overrides.cli_option_names(["smi", "apiBaseUrl"]) == [
-                              "--smi-api-base-url",
-                              "--smi-apibaseurl"
-                          ]
+                     "--smi-api-base-url",
+                     "--smi-apibaseurl"
+                   ]
         end
     end
 
@@ -80,11 +80,11 @@ defmodule SetmyInfo.Commons.Config.OverridesTest do
                 })
 
             assert overrides == %{
-                              ["smi", "server", "port"] => 9090,
-                              ["smi", "server", "secure"] => true,
-                              ["smi", "server", "host"] => "example.org",
-                              ["smi", "hosts"] => ["gamma", "delta"]
-                          }
+                     ["smi", "server", "port"] => 9090,
+                     ["smi", "server", "secure"] => true,
+                     ["smi", "server", "host"] => "example.org",
+                     ["smi", "hosts"] => ["gamma", "delta"]
+                   }
         end
 
         test "an unparseable value for a typed key falls back to the configured one" do
@@ -103,7 +103,7 @@ defmodule SetmyInfo.Commons.Config.OverridesTest do
             values = %{"SMI_API_BASE_URL" => "https://split", "SMI_APIBASEURL" => "https://flat"}
 
             assert environment_collect(@config, ["smi"], values) ==
-                              %{["smi", "apiBaseUrl"] => "https://split"}
+                     %{["smi", "apiBaseUrl"] => "https://split"}
         end
     end
 
@@ -114,7 +114,7 @@ defmodule SetmyInfo.Commons.Config.OverridesTest do
 
         test "nil root_keys opts every root in, Spring Boot style" do
             assert environment_collect(@config, nil, %{"NAME" => "chosen"}) ==
-                              %{["name"] => "chosen"}
+                     %{["name"] => "chosen"}
         end
 
         test "a key absent from the configuration is not invented" do
@@ -129,9 +129,9 @@ defmodule SetmyInfo.Commons.Config.OverridesTest do
             overrides = Overrides.cli_overrides(@config, argv, ["smi"])
 
             assert overrides == %{
-                              ["smi", "server", "port"] => 9091,
-                              ["smi", "apiBaseUrl"] => "https://cli"
-                          }
+                     ["smi", "server", "port"] => 9091,
+                     ["smi", "apiBaseUrl"] => "https://cli"
+                   }
 
             applied = Overrides.apply_overrides(@config, overrides)
 

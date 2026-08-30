@@ -25,10 +25,10 @@ defmodule SetmyInfo.Commons.ParsersIntegrationTest do
 
     test "parse_yaml_file/2 parses with string keys" do
         assert YamlParser.parse_yaml_file(@yaml_fixture) == %{
-                          "application" => %{"name" => "Env Application"},
-                          "name" => "./test/resources/env/application.yaml",
-                          "d" => %{"e" => %{"f" => "env/application.yaml"}}
-                      }
+                 "application" => %{"name" => "Env Application"},
+                 "name" => "./test/resources/env/application.yaml",
+                 "d" => %{"e" => %{"f" => "env/application.yaml"}}
+               }
     end
 
     test "parse_yaml_file/2 on a missing file yields an empty map, not a crash" do
@@ -50,7 +50,7 @@ defmodule SetmyInfo.Commons.ParsersIntegrationTest do
         post_actions = %{post_parse_function: &Map.get(&1, "name")}
 
         assert YamlParser.parse_yaml_file(@yaml_fixture, post_actions) ==
-                          "./test/resources/env/application.yaml"
+                 "./test/resources/env/application.yaml"
     end
 
     test "parse_json_file/2 parses and reports failure as nil" do

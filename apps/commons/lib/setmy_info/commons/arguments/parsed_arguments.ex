@@ -17,11 +17,11 @@ defmodule SetmyInfo.Commons.Arguments.ParsedArguments do
     @type error :: {:unknown_option, String.t()} | {:missing_required, String.t()}
 
     @type t :: %__MODULE__{
-                    options: %{optional(atom()) => term()},
-                    arguments: [String.t()],
-                    errors: [error()],
-                    summary: String.t()
-                }
+            options: %{optional(atom()) => term()},
+            arguments: [String.t()],
+            errors: [error()],
+            summary: String.t()
+          }
 
     @doc "Renders every entry in `errors` for display, via `format_error/1`."
     @spec format_errors(t()) :: [String.t()]

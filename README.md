@@ -42,10 +42,20 @@ iex -S mix            # all four endpoints up; http://127.0.0.1:48101/
 ```
 
 Indentation is **4 spaces**, like the rest of setmy.info (`.editorconfig`). Elixir's formatter has no width option and
-always emits 2, so `formatter_indent.exs` is a `mix format` plugin that runs the stock formatter and then widens each
-nesting level to 4 (alignment of wrapped continuation lines and heredoc contents are left as they are). It is loaded by
-the root and per-app `.formatter.exs` files with `Code.require_file`, so `mix format` and `mix format --check-formatted`
-both mean the 4-space form everywhere — editors, the pre-commit hook and CI included — and nothing needs compiling.
+always emits 2, so `apps/commons/formatter/` holds a `mix format` plugin (`SetmyInfo.Elixir.Formatter.FourSpaces`, unit
+tested in `apps/commons/test/unit/`) that runs the stock formatter and then widens each nesting level to 4 — alignment
+of wrapped continuation lines and the contents of heredocs and multi-line strings are left exactly as they are, and if
+widening would change a file's AST the file is left at 2 spaces with a warning rather than corrupted. The root and
+per-app `.formatter.exs` files list the plugin, so `mix format` and `mix format --check-formatted` both mean the
+4-space form everywhere — editors, the pre-commit hook and CI included. It is compiled with `commons` (an extra
+`elixirc_paths` entry) but is not in the Hex package.
+
+`mix format` keeps two caches under `_build/dev/.mix/` — the evaluated `.formatter.exs` files and the time of the last
+run, so only files changed since then are looked at. After editing the plugin, clear them and reformat:
+
+```sh
+rm -f _build/dev/.mix/format_timestamp _build/dev/.mix/cached_dot_formatter && mix format
+```
 
 Formatting is a **local** concern: `mix format` rewrites the files, and CI only verifies with
 `mix format --check-formatted` (a reformat in CI would leave changes in the Jenkins workspace that are never committed,

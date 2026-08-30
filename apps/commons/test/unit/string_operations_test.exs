@@ -14,10 +14,10 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
     describe "split_and_trim/2" do
         test "splits untrimmed comma separated values" do
             assert Operations.split_and_trim(" asdfg , bsg, csdg  , dsg  ", Operations.comma_string()) ==
-                              ["asdfg", "bsg", "csdg", "dsg"]
+                     ["asdfg", "bsg", "csdg", "dsg"]
 
             assert Operations.split_and_trim(" asdfg , bsg, csdg  , dsg  ") ==
-                              ["asdfg", "bsg", "csdg", "dsg"]
+                     ["asdfg", "bsg", "csdg", "dsg"]
         end
     end
 
@@ -78,9 +78,9 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
             assert Operations.json_to_object(nil) == %{}
 
             assert Operations.json_to_object(~s({"name":"John Doe", "city":"Tallinn"})) == %{
-                              "name" => "John Doe",
-                              "city" => "Tallinn"
-                          }
+                     "name" => "John Doe",
+                     "city" => "Tallinn"
+                   }
         end
 
         test "falls back to the default on invalid JSON" do
@@ -93,8 +93,8 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
             assert Operations.yaml_to_object(nil) == %{}
 
             assert Operations.yaml_to_object("person:\n    name: John Doe\n    city: Tallinn") == %{
-                              "person" => %{"name" => "John Doe", "city" => "Tallinn"}
-                          }
+               "person" => %{"name" => "John Doe", "city" => "Tallinn"}
+             }
         end
     end
 
@@ -106,10 +106,10 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
             assert Operations.find_named_placeholders(text, true) == ["def", "jkl", "prs"]
 
             assert Operations.find_named_placeholders(text, false) == [
-                              "${def}",
-                              "${jkl}",
-                              "${prs}"
-                          ]
+                     "${def}",
+                     "${jkl}",
+                     "${prs}"
+                   ]
         end
     end
 
@@ -118,10 +118,10 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
             text = "abc ${def} ghi ${jkl} mno ${prs} ${prs}"
 
             assert Operations.replace_named_placeholder(text, "jkl", "Hello World") ==
-                              "abc ${def} ghi Hello World mno ${prs} ${prs}"
+                     "abc ${def} ghi Hello World mno ${prs} ${prs}"
 
             assert Operations.replace_named_placeholder(text, "prs", "qwerty") ==
-                              "abc ${def} ghi ${jkl} mno qwerty qwerty"
+                     "abc ${def} ghi ${jkl} mno qwerty qwerty"
         end
 
         test "a nil replacement erases the placeholder" do
@@ -142,42 +142,42 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
 
         test "joins every pair" do
             assert Operations.combined_list(["A", "B", "C"], ["X", "Y"]) ==
-                              ["AX", "AY", "BX", "BY", "CX", "CY"]
+                     ["AX", "AY", "BX", "BY", "CX", "CY"]
 
             assert Operations.combined_list(["A", "B", "C"], ["X", "Y"], ":") ==
-                              ["A:X", "A:Y", "B:X", "B:Y", "C:X", "C:Y"]
+                     ["A:X", "A:Y", "B:X", "B:Y", "C:X", "C:Y"]
         end
 
         test "skips pairs containing nil" do
             assert Operations.combined_list(["A", "B", "C"], ["X", "Y", nil]) ==
-                              ["AX", "AY", "BX", "BY", "CX", "CY"]
+                     ["AX", "AY", "BX", "BY", "CX", "CY"]
 
             assert Operations.combined_list(["A", "B", "C", nil], ["X", "Y"], ":") ==
-                              ["A:X", "A:Y", "B:X", "B:Y", "C:X", "C:Y"]
+                     ["A:X", "A:Y", "B:X", "B:Y", "C:X", "C:Y"]
         end
     end
 
     describe "combined_by_function_list/4" do
         test "joins every pair the filter accepts" do
             assert Operations.combined_by_function_list(["A", "B", "C"], ["X", "Y"], "", fn _x ->
-                              true
-                          end) ==
-                              ["AX", "AY", "BX", "BY", "CX", "CY"]
+                     true
+                   end) ==
+                       ["AX", "AY", "BX", "BY", "CX", "CY"]
 
             assert Operations.combined_by_function_list(["A", "B", "C"], ["X", "Y"], ":", fn _x ->
-                              true
-                          end) ==
-                              ["A:X", "A:Y", "B:X", "B:Y", "C:X", "C:Y"]
+                     true
+                   end) ==
+                       ["A:X", "A:Y", "B:X", "B:Y", "C:X", "C:Y"]
         end
 
         test "a rejecting filter yields an empty result" do
             assert Operations.combined_by_function_list(["A", "B", "C"], ["X", "Y"], "", fn _x ->
-                              false
-                          end) == []
+                     false
+                   end) == []
 
             assert Operations.combined_by_function_list(["A", "B", "C"], ["X", "Y"], ":", fn _x ->
-                              false
-                          end) == []
+                     false
+                   end) == []
         end
 
         test "a missing filter yields an empty result, same as both older rows" do
@@ -188,10 +188,10 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
             reject_cy = fn value -> not Regex.match?(~r/.*[Cc].*[Yy].*/, value) end
 
             assert Operations.combined_by_function_list(["A", "B", "C"], ["X", "Y"], "", reject_cy) ==
-                              ["AX", "AY", "BX", "BY", "CX"]
+                     ["AX", "AY", "BX", "BY", "CX"]
 
             assert Operations.combined_by_function_list(["A", "B", "C"], ["X", "Y"], ":", reject_cy) ==
-                              ["A:X", "A:Y", "B:X", "B:Y", "C:X"]
+                     ["A:X", "A:Y", "B:X", "B:Y", "C:X"]
         end
     end
 

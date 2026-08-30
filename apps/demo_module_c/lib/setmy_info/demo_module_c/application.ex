@@ -20,9 +20,9 @@ defmodule SetmyInfo.DemoModuleC.Application do
             if serve?() do
                 [
                     {Plug.Cowboy,
-                      scheme: :http,
-                      plug: SetmyInfo.DemoModuleC.Web,
-                      options: [port: port(), ip: {127, 0, 0, 1}]}
+                     scheme: :http,
+                     plug: SetmyInfo.DemoModuleC.Web,
+                     options: [port: port(), ip: {127, 0, 0, 1}]}
                 ]
             else
                 []

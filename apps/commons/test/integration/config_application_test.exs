@@ -43,26 +43,26 @@ defmodule SetmyInfo.Commons.Config.ApplicationIntegrationTest do
             assert app.config_paths == ["./resources", "./test/resources"]
 
             assert app.default_application_files == [
-                              "application.json",
-                              "application.yml",
-                              "application.yaml"
-                          ]
+                     "application.json",
+                     "application.yml",
+                     "application.yaml"
+                   ]
 
             assert app.application_profiles_file_prefixes == ["application-local"]
 
             assert app.application_files == [
-                              "application.json",
-                              "application.yml",
-                              "application.yaml",
-                              "application-local.json",
-                              "application-local.yml",
-                              "application-local.yaml"
-                          ]
+                     "application.json",
+                     "application.yml",
+                     "application.yaml",
+                     "application-local.json",
+                     "application-local.yml",
+                     "application-local.yaml"
+                   ]
 
             assert Enum.map(app.applications_files_contents, &elem(&1, 0)) == [
-                              "./test/resources/application.yaml",
-                              "./test/resources/application-local.yaml"
-                          ]
+                     "./test/resources/application.yaml",
+                     "./test/resources/application-local.yaml"
+                   ]
         end
 
         test "resolves ${ENV_VAR} placeholders into real YAML scalars" do
@@ -115,17 +115,17 @@ defmodule SetmyInfo.Commons.Config.ApplicationIntegrationTest do
             assert app.config_paths == ["./resources", "./test/resources", "./test/resources/env"]
 
             assert Enum.map(app.applications_files_contents, &elem(&1, 0)) == [
-                              "./test/resources/application.yaml",
-                              "./test/resources/application-dev.yaml",
-                              "./test/resources/env/application.yaml",
-                              "./test/resources/env/optional.yaml"
-                          ]
+                     "./test/resources/application.yaml",
+                     "./test/resources/application-dev.yaml",
+                     "./test/resources/env/application.yaml",
+                     "./test/resources/env/optional.yaml"
+                   ]
 
             assert ConfigApplication.get(app, ["name"]) == "./test/resources/env/application.yaml"
             assert ConfigApplication.get(app, ["d", "e", "f"]) == "env/application.yaml"
 
             assert ConfigApplication.get(app, ["a", "k", "l"]) ==
-                              "Some optional value from environment optional yaml"
+                     "Some optional value from environment optional yaml"
 
             assert ConfigApplication.get(app, ["smi", "source"]) == "application-dev.yaml"
             assert ConfigApplication.get(app, ["smi", "server", "host"]) == "dev.api.setmy.info"
@@ -165,26 +165,26 @@ defmodule SetmyInfo.Commons.Config.ApplicationIntegrationTest do
             assert app.profiles_list == ["local"]
 
             assert app.config_paths == [
-                              "./resources",
-                              "./test/resources",
-                              "./test/resources/env",
-                              "./test/resources/cli"
-                          ]
+                     "./resources",
+                     "./test/resources",
+                     "./test/resources/env",
+                     "./test/resources/cli"
+                   ]
 
             assert Enum.map(app.applications_files_contents, &elem(&1, 0)) == [
-                              "./test/resources/application.yaml",
-                              "./test/resources/application-local.yaml",
-                              "./test/resources/env/application.yaml",
-                              "./test/resources/cli/application.yaml",
-                              "./test/resources/env/optional.yaml",
-                              "./test/resources/cli/optional.yaml"
-                          ]
+                     "./test/resources/application.yaml",
+                     "./test/resources/application-local.yaml",
+                     "./test/resources/env/application.yaml",
+                     "./test/resources/cli/application.yaml",
+                     "./test/resources/env/optional.yaml",
+                     "./test/resources/cli/optional.yaml"
+                   ]
 
             assert ConfigApplication.get(app, ["name"]) == "./test/resources/cli/application.yaml"
             assert ConfigApplication.get(app, ["g", "h", "i"]) == "cli/application.yaml"
 
             assert ConfigApplication.get(app, ["a", "k", "l"]) ==
-                              "Some optional value from CLI optional yaml"
+                     "Some optional value from CLI optional yaml"
 
             assert app.name == "Cli optional Application"
             assert app.arguments.arguments == ["sub-command"]
@@ -212,11 +212,11 @@ defmodule SetmyInfo.Commons.Config.ApplicationIntegrationTest do
             app = ConfigApplication.init([], @args_config)
 
             assert app.environment_overrides == %{
-                              ["smi", "server", "port"] => 9099,
-                              ["smi", "server", "secure"] => true,
-                              ["smi", "apiBaseUrl"] => "https://env.setmy.info",
-                              ["smi", "hosts"] => ["gamma", "delta"]
-                          }
+                     ["smi", "server", "port"] => 9099,
+                     ["smi", "server", "secure"] => true,
+                     ["smi", "apiBaseUrl"] => "https://env.setmy.info",
+                     ["smi", "hosts"] => ["gamma", "delta"]
+                   }
 
             assert ConfigApplication.get(app, ["smi", "server", "port"]) === 9099
             assert ConfigApplication.get(app, ["smi", "server", "secure"]) === true

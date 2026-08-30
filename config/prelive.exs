@@ -10,4 +10,4 @@ config :logger,
 
 config :logger, :console,
     format: "$date $timeZ [$level] [$node] $metadata- $message\n",
-    metadata: [:pid, :module, :request_id]
+  metadata: [:pid, :module, :request_id]

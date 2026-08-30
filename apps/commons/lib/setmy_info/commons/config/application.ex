@@ -58,22 +58,22 @@ defmodule SetmyInfo.Commons.Config.Application do
     @json_file_pattern ~r/\.json$/
 
     defstruct arguments: nil,
-                        env_profiles: [],
-                        cli_profiles: [],
-                        env_config_paths: [],
-                        cli_config_paths: [],
-                        config_paths: [],
-                        profiles_list: [],
-                        default_application_files: [],
-                        application_profiles_file_prefixes: [],
-                        application_profiles_files: [],
-                        application_files: [],
-                        applications_files_contents: [],
-                        file_configuration: %{},
-                        environment_overrides: %{},
-                        cli_overrides: %{},
-                        merged_configuration: %{},
-                        name: "default"
+              env_profiles: [],
+              cli_profiles: [],
+              env_config_paths: [],
+              cli_config_paths: [],
+              config_paths: [],
+              profiles_list: [],
+              default_application_files: [],
+              application_profiles_file_prefixes: [],
+              application_profiles_files: [],
+              application_files: [],
+              applications_files_contents: [],
+              file_configuration: %{},
+              environment_overrides: %{},
+              cli_overrides: %{},
+              merged_configuration: %{},
+              name: "default"
 
     @type t :: %__MODULE__{}
 
@@ -204,13 +204,13 @@ defmodule SetmyInfo.Commons.Config.Application do
 
     @doc "`{path, parsed}` for every config file that exists, in overload order."
     @spec applications_files_paths_parsing([String.t()], [String.t()], [String.t()], [String.t()]) ::
-                    [{Path.t(), term()}]
+            [{Path.t(), term()}]
     def applications_files_paths_parsing(
-                config_paths,
-                application_files,
-                optional_env_application_files,
-                optional_cli_application_files
-            ) do
+          config_paths,
+          application_files,
+          optional_env_application_files,
+          optional_cli_application_files
+        ) do
         config_paths
         |> StringOperations.combined_by_function_list(application_files, "/", &File.regular?/1)
         |> Enum.concat(optional_env_application_files)

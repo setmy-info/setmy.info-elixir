@@ -34,7 +34,7 @@ defmodule SetmyInfo.Commons.Environment.VariablesIntegrationTest do
         assert Variables.get_float_environment_variable("SMI_TEST_FLOAT") == 1234.5678
 
         assert Variables.get_json_environment_variable("SMI_TEST_JSON") ==
-                          %{"name" => "John", "age" => 30}
+                 %{"name" => "John", "age" => 30}
     end
 
     test "typed readers fall back when the variable is unset" do
@@ -63,11 +63,11 @@ defmodule SetmyInfo.Commons.Environment.VariablesIntegrationTest do
             put_environment(%{"SMI_TEST_LIST" => "a,b"})
 
             assert Variables.get_environment_variables_list("SMI_TEST_LIST", &String.upcase/1) ==
-                              ["A", "B"]
+                     ["A", "B"]
 
             assert Variables.get_environment_variables_list("SMI_TEST_LIST", fn value, index ->
-                              {index, value}
-                          end) == [{0, "a"}, {1, "b"}]
+                     {index, value}
+                   end) == [{0, "a"}, {1, "b"}]
         end
     end
 
@@ -86,7 +86,7 @@ defmodule SetmyInfo.Commons.Environment.VariablesIntegrationTest do
             put_environment(%{"SMI_SERVER_PORT" => "9090"})
 
             assert Overrides.environment_overrides(config, ["smi"]) ==
-                              %{["smi", "server", "port"] => 9090}
+                     %{["smi", "server", "port"] => 9090}
         end
     end
 end

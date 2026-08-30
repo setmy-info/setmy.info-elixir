@@ -1,6 +1,7 @@
-Code.require_file("../../formatter_indent.exs", __DIR__)
-
+# The umbrella's 4-space indentation plugin (apps/commons/formatter/). A Hex
+# consumer's `import_deps` only reads the `export:` key of this file, so the
+# plugin entry is inert there.
 [
     plugins: [SetmyInfo.Elixir.Formatter.FourSpaces],
-    inputs: ["{mix,.formatter}.exs", "{lib,test}/**/*.{ex,exs}"]
+    inputs: ["{mix,.formatter}.exs", "{lib,test,formatter}/**/*.{ex,exs}"]
 ]

@@ -205,15 +205,18 @@ defmodule SetmyInfo.Elixir.MixProject do
 
     # Runs `task` inside the lifecycle of the given tiers: all their pre steps,
     # the task, then all their post steps - the post steps in a `try/after`, so
-    # a failing task (a Mix.raise, a compile error) cannot leave them unrun.
+    # a failing pre step or task (a Mix.raise, a compile error) cannot leave
+    # them unrun.
     # (A failing `mix test` itself only records a non-zero exit status; it does
     # not raise, so the post steps run there anyway.) When more than one tier is
     # bracketed, a step shared by their pre (or post) phases runs once.
     defp bracket(tiers, task, task_args) do
         fn args ->
-            run_steps(tiers, :pre)
-
+            # The pre steps are inside the try too: a pre step that fails halfway
+            # (two daemons up, the third's port never answering) must still be
+            # cleaned up by the post steps, which are idempotent.
             try do
+                run_steps(tiers, :pre)
                 Mix.Task.rerun(task, task_args ++ args)
             after
                 run_steps(tiers, :post)
@@ -248,16 +251,16 @@ defmodule SetmyInfo.Elixir.MixProject do
     defp releases do
         Map.new(@deployable_apps, fn app ->
             {app,
-              [
-                  # {:from_app, app} rather than the umbrella root's own version: each
-                  # app is versioned independently, and the release is that app's.
-                  version: {:from_app, app},
-                  # Umbrella siblings this app depends on are started inside the release
-                  # too (Mix insists: a :permanent app's deps cannot be merely :load).
-                  # They do NOT open their endpoints there - see config/runtime.exs.
-                  applications: [{app, :permanent}],
-                  include_executables_for: [:unix]
-              ]}
+             [
+                 # {:from_app, app} rather than the umbrella root's own version: each
+                 # app is versioned independently, and the release is that app's.
+                 version: {:from_app, app},
+                 # Umbrella siblings this app depends on are started inside the release
+                 # too (Mix insists: a :permanent app's deps cannot be merely :load).
+                 # They do NOT open their endpoints there - see config/runtime.exs.
+                 applications: [{app, :permanent}],
+                 include_executables_for: [:unix]
+             ]}
         end)
     end
 
@@ -270,7 +273,10 @@ defmodule SetmyInfo.Elixir.MixProject do
     # daemon and wait until its port answers.
     defp servers_start(_args) do
         # Stop first, then rebuild: never swap release files under a live VM.
+        # `bin/<app> stop` returns as soon as the VM has been told to stop, so
+        # wait until each port is actually released before rebuilding on top.
         Enum.each(@deployable_apps, &release_cmd(&1, "stop"))
+        Enum.each(@deployable_apps, &wait_for_port_free/1)
         release_all(["--overwrite", "--quiet"])
         Enum.each(@deployable_apps, &release_cmd(&1, "daemon"))
         Enum.each(@deployable_apps, &wait_for_port/1)
@@ -302,6 +308,24 @@ defmodule SetmyInfo.Elixir.MixProject do
         else
             Mix.shell().info("#{app} #{command}: no release at #{bin}, skipping")
             1
+        end
+    end
+
+    defp wait_for_port_free(app, attempts \\ 50) do
+        port = Application.fetch_env!(app, :port)
+
+        case :gen_tcp.connect(~c"127.0.0.1", port, [], 200) do
+            {:error, _} ->
+                :ok
+
+            {:ok, socket} when attempts > 0 ->
+                :gen_tcp.close(socket)
+                Process.sleep(200)
+                wait_for_port_free(app, attempts - 1)
+
+            {:ok, socket} ->
+                :gen_tcp.close(socket)
+                Mix.raise("port #{port} of #{app} is still in use after stop - something else on it?")
         end
     end
 
@@ -356,16 +380,16 @@ defmodule SetmyInfo.Elixir.MixProject do
             out = Path.join(dir, "#{app}.xml")
 
             case System.cmd(mix_executable(), ["sbom.cyclonedx", "-f", "-l", "prod", "-o", out],
-                          cd: Path.join("apps", to_string(app)),
-                          env: [{"MIX_ENV", to_string(Mix.env())}],
-                          stderr_to_stdout: true
-                      ) do
+                   cd: Path.join("apps", to_string(app)),
+                   env: [{"MIX_ENV", to_string(Mix.env())}],
+                   stderr_to_stdout: true
+                 ) do
                 {_, 0} ->
                     Mix.shell().info("Wrote #{Path.relative_to_cwd(out)}")
 
                 {output, status} ->
                     Mix.raise("mix sbom.cyclonedx failed for #{app} (exit #{status}):\n#{output}")
-            end
+      end
         end
     end
 
@@ -381,7 +405,7 @@ defmodule SetmyInfo.Elixir.MixProject do
 
             {output, status} ->
                 Mix.raise("mix deps.tree failed (exit #{status}):\n#{output}")
-        end
+    end
     end
 
     # `mix` is `mix.bat` on Windows; find_executable resolves whichever is there.

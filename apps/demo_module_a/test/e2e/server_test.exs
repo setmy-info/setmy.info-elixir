@@ -11,21 +11,22 @@ defmodule SetmyInfo.DemoModuleA.ServerTest do
 
     @moduletag :e2e
 
-    @base ~c"http://127.0.0.1:48101"
+    # The port comes from config/config.exs, the same place the daemon read it.
+    defp base, do: ~c"http://127.0.0.1:#{Application.fetch_env!(:demo_module_a, :port)}"
 
     test "serves the demo page at the root" do
-        {:ok, {{_, 200, _}, _headers, body}} = :httpc.request(@base ++ ~c"/")
+        {:ok, {{_, 200, _}, _headers, body}} = :httpc.request(base() ++ ~c"/")
 
         assert String.contains?(to_string(body), "Module A web example")
     end
 
     test "serves the demo page at its own path" do
-        {:ok, {{_, 200, _}, _headers, body}} = :httpc.request(@base ++ ~c"/index.html")
+        {:ok, {{_, 200, _}, _headers, body}} = :httpc.request(base() ++ ~c"/index.html")
 
         assert String.contains?(to_string(body), "Module A web example")
     end
 
     test "answers 404 for anything else" do
-        {:ok, {{_, 404, _}, _headers, _body}} = :httpc.request(@base ++ ~c"/no-such-page")
+        {:ok, {{_, 404, _}, _headers, _body}} = :httpc.request(base() ++ ~c"/no-such-page")
     end
 end

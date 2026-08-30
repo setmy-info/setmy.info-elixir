@@ -169,12 +169,12 @@ defmodule SetmyInfo.Commons.String.Operations do
     since `Config.Application`'s file discovery relies on always passing one.
     """
     @spec combined_by_function_list(
-                    [String.t()],
-                    [String.t()],
-                    String.t(),
-                    (String.t() -> boolean()) | nil
-                ) ::
-                    [String.t()]
+            [String.t()],
+            [String.t()],
+            String.t(),
+            (String.t() -> boolean()) | nil
+          ) ::
+              [String.t()]
     def combined_by_function_list(list1, list2, join_text \\ @empty_string, func \\ nil) do
         result =
             for item1 <- list1, item2 <- list2, reduce: [] do

@@ -122,8 +122,8 @@ defmodule SetmyInfo.Commons.Config.Overrides do
     candidate name to a raw string or `nil`.
     """
     @spec collect(map(), [String.t()] | nil, (path() -> [String.t()]), (String.t() ->
-                                                                                                                                                String.t() | nil)) ::
-                    %{path() => term()}
+                                                                          String.t() | nil)) ::
+            %{path() => term()}
     def collect(config, root_keys, names_builder, lookup) do
         config
         |> leaf_paths(root_keys)

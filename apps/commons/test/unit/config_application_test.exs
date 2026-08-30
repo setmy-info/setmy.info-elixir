@@ -14,7 +14,7 @@ defmodule SetmyInfo.Commons.Config.ApplicationTest do
     describe "find_last_not_none_and_empty/1" do
         test "returns the last non-empty list" do
             assert ConfigApplication.find_last_not_none_and_empty([nil, ["1", "2"], nil, ["3", "4"]]) ==
-                              ["3", "4"]
+                     ["3", "4"]
 
             assert ConfigApplication.find_last_not_none_and_empty([nil, nil, nil]) == []
             assert ConfigApplication.find_last_not_none_and_empty([["a"], []]) == ["a"]
@@ -28,12 +28,12 @@ defmodule SetmyInfo.Commons.Config.ApplicationTest do
             right = %{"a" => %{"c" => 3, "d" => 4}}
 
             assert ConfigApplication.merge_maps(left, right) ==
-                              %{"a" => %{"b" => 1, "c" => 3, "d" => 4}, "keep" => true}
+                     %{"a" => %{"b" => 1, "c" => 3, "d" => 4}, "keep" => true}
         end
 
         test "a scalar on the right replaces a map on the left" do
             assert ConfigApplication.merge_maps(%{"a" => %{"b" => 1}}, %{"a" => "scalar"}) ==
-                              %{"a" => "scalar"}
+                     %{"a" => "scalar"}
         end
 
         test "nil on the right keeps the left side, so an unparseable file is skipped" do
@@ -50,7 +50,7 @@ defmodule SetmyInfo.Commons.Config.ApplicationTest do
             ]
 
             assert ConfigApplication.merge_config(contents) ==
-                              %{"smi" => %{"port" => 8080, "host" => "127.0.0.1"}}
+                     %{"smi" => %{"port" => 8080, "host" => "127.0.0.1"}}
         end
 
         test "no files yields an empty configuration" do
@@ -61,7 +61,7 @@ defmodule SetmyInfo.Commons.Config.ApplicationTest do
     describe "get_config_app_name/1" do
         test "reads application.name when present" do
             assert ConfigApplication.get_config_app_name(%{"application" => %{"name" => "svc"}}) ==
-                              "svc"
+                     "svc"
         end
 
         test "yields nil when absent or not a map" do
