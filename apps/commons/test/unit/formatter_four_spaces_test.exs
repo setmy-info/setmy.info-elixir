@@ -8,7 +8,15 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpacesTest do
 
     alias SetmyInfo.Elixir.Formatter.FourSpaces
 
-    defp format(source), do: FourSpaces.format(source, [])
+    import ExUnit.CaptureIO
+
+    # The AST guard falls back to the stock output with a message; here that
+    # counts as a failure, so a case the plugin cannot widen is never hidden.
+    defp format(source) do
+        {result, output} = with_io(:stderr, fn -> FourSpaces.format(source, []) end)
+        assert output == "", "plugin fell back to the stock output: " <> output
+        result
+    end
 
     test "widens nesting from 2 to 4 spaces and is idempotent" do
         source = "defmodule A do\n  def f do\n    :ok\n  end\nend\n"
@@ -56,6 +64,9 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpacesTest do
     test "interpolation containing the delimiter does not end the string early" do
         source = "defmodule A do\n  def f do\n    \"a\#{\"}\"}b\n  c\"\n  end\nend\n"
         formatted = format(source)
+
+        assert formatted ==
+                 "defmodule A do\n    def f do\n        \"a\#{\"}\"}b\n  c\"\n    end\nend\n"
 
         assert format(formatted) == formatted
         assert {{:module, _, _, _}, _} = Code.eval_string(formatted)

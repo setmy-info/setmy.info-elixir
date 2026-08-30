@@ -138,6 +138,14 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpaces do
     defp count_newlines(["}" | rest], closing, true, depth, count) when depth > 0,
         do: count_newlines(rest, closing, true, depth - 1, count)
 
+    # A string inside the interpolation: skipped whole, so a `}` or the outer
+    # delimiter in it does not end anything.
+    defp count_newlines([quote | rest], closing, true, depth, count)
+         when depth > 0 and quote in ["\"", "'"] do
+        {rest, count} = skip_quoted(rest, quote, count)
+        count_newlines(rest, closing, true, depth, count)
+    end
+
     defp count_newlines(["\n" | rest], closing, interpolates?, depth, count),
         do: count_newlines(rest, closing, interpolates?, depth, count + 1)
 
@@ -146,6 +154,12 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpaces do
             do: count,
             else: count_newlines(rest, closing, interpolates?, depth, count)
     end
+
+    defp skip_quoted([], _quote, count), do: {[], count}
+    defp skip_quoted(["\\", _escaped | rest], quote, count), do: skip_quoted(rest, quote, count)
+    defp skip_quoted([quote | rest], quote, count), do: {rest, count}
+    defp skip_quoted(["\n" | rest], quote, count), do: skip_quoted(rest, quote, count + 1)
+    defp skip_quoted([_ | rest], quote, count), do: skip_quoted(rest, quote, count)
 
     # stack: [{stock_indent, wanted_indent}] of the enclosing lines, innermost
     # first; heredoc: nil or {delimiter, shift} while inside one.
