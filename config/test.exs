@@ -8,8 +8,8 @@ config :logger, level: :warning
 # JUNIT_REPORT_FILE names the file per tier: every `mix test` run writes the
 # same file otherwise, and CI's junit step would only see the last tier.
 config :junit_formatter,
-  report_dir: Path.expand("../reports/junit", __DIR__),
-  report_file: System.get_env("JUNIT_REPORT_FILE", "test-junit-report.xml"),
-  prepend_project_name?: true,
-  include_filename?: true,
-  automatic_create_dir?: true
+    report_dir: Path.expand("../reports/junit", __DIR__),
+    report_file: System.get_env("JUNIT_REPORT_FILE", "test-junit-report.xml"),
+    prepend_project_name?: true,
+    include_filename?: true,
+    automatic_create_dir?: true

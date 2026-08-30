@@ -1,8 +1,8 @@
 import Config
 
 config :logger, :console,
-  format: "$date $time [$level] [$node] $metadata- $message\n",
-  metadata: [:pid, :module, :function, :line]
+    format: "$date $time [$level] [$node] $metadata- $message\n",
+    metadata: [:pid, :module, :function, :line]
 
 # Each demo app's HTTP endpoint port, read by its own supervision tree
 # (`SetmyInfo.DemoModule*.Application`). One config tree for the whole

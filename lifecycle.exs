@@ -22,13 +22,13 @@
 # adds what its own tiers need next to them: a database, a message broker, a
 # mock of a third-party API, seeding test data, ...
 defmodule SetmyInfo.Elixir.Lifecycle do
-  @type step :: String.t() | (OptionParser.argv() -> any())
+    @type step :: String.t() | (OptionParser.argv() -> any())
 
-  @spec steps(:pre_integration_test | :post_integration_test | :pre_e2e_test | :post_e2e_test) ::
-          [step()]
-  def steps(:pre_integration_test), do: ["server.start"]
-  def steps(:post_integration_test), do: ["server.stop"]
+    @spec steps(:pre_integration_test | :post_integration_test | :pre_e2e_test | :post_e2e_test) ::
+                    [step()]
+    def steps(:pre_integration_test), do: ["server.start"]
+    def steps(:post_integration_test), do: ["server.stop"]
 
-  def steps(:pre_e2e_test), do: ["server.start"]
-  def steps(:post_e2e_test), do: ["server.stop"]
+    def steps(:pre_e2e_test), do: ["server.start"]
+    def steps(:post_e2e_test), do: ["server.stop"]
 end

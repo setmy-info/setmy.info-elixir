@@ -41,6 +41,12 @@ mix format            # reformat in place - run before every commit
 iex -S mix            # all four endpoints up; http://127.0.0.1:48101/
 ```
 
+Indentation is **4 spaces**, like the rest of setmy.info (`.editorconfig`). Elixir's formatter has no width option and
+always emits 2, so `formatter_indent.exs` is a `mix format` plugin that runs the stock formatter and then widens each
+nesting level to 4 (alignment of wrapped continuation lines and heredoc contents are left as they are). It is loaded by
+the root and per-app `.formatter.exs` files with `Code.require_file`, so `mix format` and `mix format --check-formatted`
+both mean the 4-space form everywhere — editors, the pre-commit hook and CI included — and nothing needs compiling.
+
 Formatting is a **local** concern: `mix format` rewrites the files, and CI only verifies with
 `mix format --check-formatted` (a reformat in CI would leave changes in the Jenkins workspace that are never committed,
 and the check could then never fail). Turn on format-on-save in your editor (ElixirLS / Lexical both do it), or add a

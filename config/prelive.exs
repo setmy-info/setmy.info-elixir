@@ -5,9 +5,9 @@ import Config
 # Mirrors live.exs closely on purpose - prelive exists to validate
 # production-like behavior before live, not to diverge from it.
 config :logger,
-  level: :info,
-  utc_log: true
+    level: :info,
+    utc_log: true
 
 config :logger, :console,
-  format: "$date $timeZ [$level] [$node] $metadata- $message\n",
-  metadata: [:pid, :module, :request_id]
+    format: "$date $timeZ [$level] [$node] $metadata- $message\n",
+    metadata: [:pid, :module, :request_id]
