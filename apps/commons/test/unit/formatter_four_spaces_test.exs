@@ -12,41 +12,57 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpacesTest do
 
     test "widens nesting from 2 to 4 spaces and is idempotent" do
         source = "defmodule A do\n  def f do\n    :ok\n  end\nend\n"
-    expected = "defmodule A do\n    def f do\n        :ok\n    end\nend\n"
+        expected = "defmodule A do\n    def f do\n        :ok\n    end\nend\n"
 
-    assert format(source) == expected
-    assert format(expected) == expected
-  end
+        assert format(source) == expected
+        assert format(expected) == expected
+    end
 
     test "keeps alignment offsets of wrapped continuation lines" do
         source = "assert value == [\n  \"a\",\n  \"b\"\n]\n"
 
-    assert format(source) == "assert value == [\n         \"a\",\n         \"b\"\n       ]\n"
-  end
+        assert format(source) == "assert value == [\n         \"a\",\n         \"b\"\n       ]\n"
+    end
 
-  test "heredoc content keeps its indentation relative to the delimiter" do
-    source = "defmodule A do\n  @moduledoc \"\"\"\n  Text\n\n      code sample\n  \"\"\"\nend\n"
-    formatted = format(source)
+    test "heredoc content keeps its indentation relative to the delimiter" do
+        source = "defmodule A do\n  @moduledoc \"\"\"\n  Text\n\n      code sample\n  \"\"\"\nend\n"
+        formatted = format(source)
 
-    assert formatted ==
-             "defmodule A do\n    @moduledoc \"\"\"\n    Text\n\n        code sample\n    \"\"\"\nend\n"
+        assert formatted ==
+                 "defmodule A do\n    @moduledoc \"\"\"\n    Text\n\n        code sample\n    \"\"\"\nend\n"
 
-    assert module_doc(formatted) == module_doc(source)
-    assert module_doc(source) == "Text\n\n    code sample\n"
-  end
+        assert module_doc(formatted) == module_doc(source)
+        assert module_doc(source) == "Text\n\n    code sample\n"
+    end
 
-  test "multi-line strings, sigils and charlists keep their values" do
-    source =
+    test "multi-line strings, sigils and charlists keep their values" do
+        source =
             "defmodule A do\n  def f do\n    {\"a\n  b\", ~r/c\n  d/, ~c\"e\n  f\", \"g\#{1}h\n  i\"}\n  end\nend\n"
 
-    formatted = format(source)
+        formatted = format(source)
 
-    assert format(formatted) == formatted
-    assert eval(formatted) == eval(source)
-    assert eval(source) == {"a\n  b", "c\n  d", ~c"e\n  f", "g1h\n  i"}
-  end
+        assert format(formatted) == formatted
+        assert eval(formatted) == eval(source)
+        assert eval(source) == {"a\n  b", "c\n  d", ~c"e\n  f", "g1h\n  i"}
+    end
 
-  defp module_doc(source) do
+    test "an escaped newline in a one-line string does not swallow the next line" do
+        source = "defmodule A do\n  def f do\n    Enum.join([1], \"\\n\")\n  end\nend\n"
+
+        assert format(source) ==
+                 "defmodule A do\n    def f do\n        Enum.join([1], \"\\n\")\n    end\nend\n"
+    end
+
+    test "interpolation containing the delimiter does not end the string early" do
+        source = "defmodule A do\n  def f do\n    \"a\#{\"}\"}b\n  c\"\n  end\nend\n"
+        formatted = format(source)
+
+        assert format(formatted) == formatted
+        assert {{:module, _, _, _}, _} = Code.eval_string(formatted)
+        assert A.f() == "a}b\n  c"
+    end
+
+    defp module_doc(source) do
         {:defmodule, _, [_, [do: {:@, _, [{:moduledoc, _, [doc]}]}]]} = Code.string_to_quoted!(source)
         doc
     end

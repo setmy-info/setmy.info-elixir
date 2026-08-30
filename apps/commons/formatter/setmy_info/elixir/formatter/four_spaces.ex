@@ -1,31 +1,34 @@
-# `mix format` plugin: the stock Elixir formatter has no indentation-width
-# option and always emits 2 spaces. This project's style is 4 (.editorconfig),
-# so every .ex/.exs file goes through the stock formatter and then has its
-# indentation widened. Because it is a plugin, `mix format --check-formatted`
-# (pre-commit hook, CI quality gate, editors) verifies the same 4-space form.
-#
-# The stock output mixes two kinds of indentation: NESTING, always exactly +2
-# per level (a `do` block, a `->` clause, a wrapped argument list), and
-# ALIGNMENT, a continuation line placed at an arbitrary column offset from the
-# statement it belongs to (`assert x == [` puts the elements 9 columns in; a
-# wrapped `@spec` aligns under its opening paren). Only nesting steps are
-# widened (2 -> 4); alignment offsets are carried over unchanged, otherwise a
-# wrapped line at column 70 would end up at 140.
-#
-# Inside a heredoc (`"""` / `'''`) the content is shifted by exactly what its
-# delimiter line was shifted, so string values - docs, code samples in docs,
-# test fixtures - are unchanged. The continuation lines of an ordinary
-# multi-line string, charlist or sigil ARE the value, so they are copied
-# byte for byte (found through the AST, not by guessing at quotes). As a last
-# line of defence the result must parse to the same AST as the stock output;
-# if it does not, the stock output is used for that file and a warning printed.
-#
-# A compiled module of the commons app (apps/commons/formatter/, an extra
-# elixirc path that is not in the Hex package) rather than a script evaluated
-# from .formatter.exs: `mix format` caches the evaluated .formatter.exs under
-# _build/ and loads plugins from the compiled project, so this is the only
-# form that is found reliably on every run.
 defmodule SetmyInfo.Elixir.Formatter.FourSpaces do
+    @moduledoc """
+    `mix format` plugin: the stock Elixir formatter has no indentation-width
+    option and always emits 2 spaces. This project's style is 4 (.editorconfig),
+    so every .ex/.exs file goes through the stock formatter and then has its
+    indentation widened. Because it is a plugin, `mix format --check-formatted`
+    (pre-commit hook, CI quality gate, editors) verifies the same 4-space form.
+
+    The stock output mixes two kinds of indentation: NESTING, always exactly +2
+    per level (a `do` block, a `->` clause, a wrapped argument list), and
+    ALIGNMENT, a continuation line placed at an arbitrary column offset from the
+    statement it belongs to (`assert x == [` puts the elements 9 columns in; a
+    wrapped `@spec` aligns under its opening paren). Only nesting steps are
+    widened (2 -> 4); alignment offsets are carried over unchanged, otherwise a
+    wrapped line at column 70 would end up at 140.
+
+    Inside a heredoc (`\"""` / `'''`) the content is shifted by exactly what its
+    delimiter line was shifted, so string values - docs, code samples in docs,
+    test fixtures - are unchanged. The continuation lines of an ordinary
+    multi-line string, charlist or sigil ARE the value, so they are copied
+    byte for byte (found through the AST, not by guessing at quotes). As a last
+    line of defence the result must parse to the same AST as the stock output;
+    if it does not, the stock output is used for that file and a warning printed.
+
+    A compiled module of the commons app (apps/commons/formatter/, an extra
+    elixirc path that is not in the Hex package) rather than a script evaluated
+    from .formatter.exs: `mix format` caches the evaluated .formatter.exs under
+    _build/ and loads plugins from the compiled project, so this is the only
+    form that is found reliably on every run.
+    """
+
     @behaviour Mix.Tasks.Format
 
     @heredocs [~s("""), ~s(''')]
@@ -42,17 +45,15 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpaces do
         widened =
             stock
             |> String.split("\n")
-      |> Enum.with_index(1)
+            |> Enum.with_index(1)
             |> reindent(protected_lines(stock), [{0, 0}], nil, [])
             |> Enum.join("\n")
-      |> String.replace(~r/\n*\z/, "\n")
+            |> String.replace(~r/\n*\z/, "\n")
 
         if ast(widened) == ast(stock) do
             widened
         else
-            Mix.shell().error(
-                "formatter_indent: widening changed #{opts[:file] || "a file"}, kept 2 spaces"
-            )
+            Mix.shell().error("FourSpaces: widening changed #{opts[:file] || "a file"}, kept 2 spaces")
 
             stock
         end
@@ -70,6 +71,8 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpaces do
     # Line numbers that are the inside of a multi-line string, charlist or
     # sigil that is not a heredoc: lines after the one the literal starts on.
     defp protected_lines(stock) do
+        lines = String.split(stock, "\n")
+
         stock
         |> Code.string_to_quoted!(
             columns: true,
@@ -78,25 +81,14 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpaces do
         )
         |> Macro.prewalk(MapSet.new(), fn
             {:__literal__, meta, [value]} = node, acc when is_binary(value) or is_list(value) ->
-                {node, protect(acc, meta, literal_newlines(value))}
+                {node, protect(acc, meta, lines)}
 
-            {:<<>>, meta, parts} = node, acc ->
-                {node,
-                 protect(
-                     acc,
-                     meta,
-                     Enum.sum(for part <- parts, is_binary(part), do: literal_newlines(part))
-                 )}
+            {:<<>>, meta, _parts} = node, acc ->
+                {node, protect(acc, meta, lines)}
 
-            {sigil, meta, [{:<<>>, _, parts}, _mods]} = node, acc when is_atom(sigil) ->
+            {sigil, meta, [{:<<>>, _, _parts}, _mods]} = node, acc when is_atom(sigil) ->
                 if String.starts_with?(Atom.to_string(sigil), "sigil_"),
-                    do:
-                        {node,
-                         protect(
-                             acc,
-                             meta,
-                             Enum.sum(for part <- parts, is_binary(part), do: literal_newlines(part))
-                         )},
+                    do: {node, protect(acc, meta, lines)},
                     else: {node, acc}
 
             node, acc ->
@@ -105,20 +97,55 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpaces do
         |> elem(1)
     end
 
-    defp protect(acc, meta, newlines) do
+    # The lines a literal continues on are found in the SOURCE, not in the
+    # value: `"a\nb"` on one physical line contains a newline character but
+    # continues on no line at all.
+    defp protect(acc, meta, lines) do
         delimiter = meta[:delimiter]
 
-        if newlines > 0 and is_binary(delimiter) and delimiter not in @heredocs and meta[:line] do
-            Enum.into((meta[:line] + 1)..(meta[:line] + newlines), acc)
+        if is_binary(delimiter) and delimiter not in @heredocs and meta[:line] do
+            continued = physical_newlines(lines, meta[:line], meta[:column], delimiter)
+            Enum.into((meta[:line] + 1)..(meta[:line] + continued)//1, acc)
         else
             acc
         end
     end
 
-    defp literal_newlines(value) when is_binary(value),
-        do: value |> String.graphemes() |> Enum.count(&(&1 == "\n"))
+    @closing %{"(" => ")", "[" => "]", "{" => "}", "<" => ">"}
 
-    defp literal_newlines(value) when is_list(value), do: Enum.count(value, &(&1 == ?\n))
+    # Newlines between a literal's opening delimiter (at line/column, after a
+    # `~X` sigil prefix if any) and its matching closing one, honouring `\`
+    # escapes and `\#{...}` interpolation (not in uppercase sigils).
+    defp physical_newlines(lines, line, column, delimiter) do
+        tail = lines |> Enum.drop(line - 1) |> Enum.join("\n") |> String.slice((column - 1)..-1//1)
+        interpolates? = not Regex.match?(~r/^~[A-Z]/, tail)
+        [_prefix, rest] = String.split(tail, delimiter, parts: 2)
+        closing = Map.get(@closing, delimiter, delimiter)
+        count_newlines(String.graphemes(rest), closing, interpolates?, 0, 0)
+    end
+
+    defp count_newlines([], _closing, _interpolates?, _depth, count), do: count
+
+    defp count_newlines(["\\", _escaped | rest], closing, interpolates?, depth, count),
+        do: count_newlines(rest, closing, interpolates?, depth, count)
+
+    defp count_newlines(["#", "{" | rest], closing, true, depth, count),
+        do: count_newlines(rest, closing, true, depth + 1, count)
+
+    defp count_newlines(["{" | rest], closing, true, depth, count) when depth > 0,
+        do: count_newlines(rest, closing, true, depth + 1, count)
+
+    defp count_newlines(["}" | rest], closing, true, depth, count) when depth > 0,
+        do: count_newlines(rest, closing, true, depth - 1, count)
+
+    defp count_newlines(["\n" | rest], closing, interpolates?, depth, count),
+        do: count_newlines(rest, closing, interpolates?, depth, count + 1)
+
+    defp count_newlines([grapheme | rest], closing, interpolates?, depth, count) do
+        if depth == 0 and String.starts_with?(Enum.join([grapheme | Enum.take(rest, 2)]), closing),
+            do: count,
+            else: count_newlines(rest, closing, interpolates?, depth, count)
+    end
 
     # stack: [{stock_indent, wanted_indent}] of the enclosing lines, innermost
     # first; heredoc: nil or {delimiter, shift} while inside one.

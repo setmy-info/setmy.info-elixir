@@ -1,4 +1,4 @@
-defmodule SetmyInfo.Commons.EnvironmentVariablesE2eTest do
+defmodule SetmyInfo.Commons.Environment.VariablesE2eTest do
     @moduledoc """
     E2E tier (ADR-0031 puts "Cucumber / Spec by example" here). Scenario for
     scenario port of python-commons'

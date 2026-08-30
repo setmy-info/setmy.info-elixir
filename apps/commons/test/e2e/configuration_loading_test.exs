@@ -1,4 +1,4 @@
-defmodule SetmyInfo.Commons.ConfigurationLoadingE2eTest do
+defmodule SetmyInfo.Commons.Config.LoadingE2eTest do
     @moduledoc """
     E2E tier (ADR-0031). Drives the whole library the way a real application
     does - `SetmyInfo.Commons.load/3` with a real argv, real files on disk and

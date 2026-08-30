@@ -41,9 +41,6 @@ defmodule SetmyInfo.Commons.EnvironmentCase do
         :ok
     end
 
-    @doc "Every `${...}` placeholder value the shared `application.yaml` fixture references."
-    def placeholder_variables, do: @placeholder_variables
-
     @doc "Sets environment variables for the duration of one test."
     def put_environment(variables) do
         System.put_env(variables)

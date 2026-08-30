@@ -34,6 +34,9 @@ defmodule SetmyInfo.Commons do
     | `SetmyInfo.Commons.Config.Overrides`       | *(new in this row)*                      |
     | `SetmyInfo.Commons.Arguments.Parser`       | `arguments.parser`                       |
     | `SetmyInfo.Commons.Arguments.Constants`    | `arguments.constants`                    |
+    | `SetmyInfo.Commons.Arguments.Argument`     | `arguments.argument`                     |
+    | `SetmyInfo.Commons.Arguments.Config`       | `arguments.config`                       |
+    | `SetmyInfo.Commons.Arguments.ParsedArguments` | *(new in this row)*                   |
     | `SetmyInfo.Commons.Environment.Variables`  | `environment.variables`                  |
     | `SetmyInfo.Commons.Yaml.Parser`            | `yaml.parser`                            |
     | `SetmyInfo.Commons.Json.Parser`            | `json.parser`                            |

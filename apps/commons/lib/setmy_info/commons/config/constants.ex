@@ -71,7 +71,7 @@ defmodule SetmyInfo.Commons.Config.Constants do
 
     @doc """
     Later path wins. `./resources` is this repo's own source-resources
-    convention (see `Mix.Tasks.Resources`), `./test/resources` mirrors both
+    convention, `./test/resources` mirrors both
     older rows' test-resources entry and lets a test run override it.
     """
     @spec default_config_paths() :: [String.t()]

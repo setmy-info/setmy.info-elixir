@@ -1,4 +1,4 @@
-defmodule SetmyInfo.Commons.ParsersIntegrationTest do
+defmodule SetmyInfo.Commons.Parsers.IntegrationTest do
     @moduledoc """
     Integration tier (ADR-0031: data files and config files are IT
     dependencies). Covers the two file parsers against the real fixtures, and

@@ -5,7 +5,8 @@ defmodule SetmyInfo.DemoModuleB.Application do
     Supervises one Cowboy endpoint serving the app's `priv/web` demo page on
     the port configured in `config/config.exs`. Because this is the app's
     `mod:` callback, the endpoint is running for anything that starts the
-    application - `iex -S mix` and `mix run --no-halt` alike. The integration
+    application - `iex -S mix` and `mix run --no-halt` alike - except the test
+    VM, where `config/test.exs` turns serving off. The integration
     and e2e tiers run with `--no-start` against this app's own OTP release,
     started by the tiers' pre step (`mix server.start`, see the umbrella's
     lifecycle.exs); see `config/runtime.exs` for why only the release's own app
@@ -38,7 +39,8 @@ defmodule SetmyInfo.DemoModuleB.Application do
     # and nowhere else, so a missing one is a misconfiguration, not a fallback.
     defp port, do: Application.fetch_env!(:demo_module_b, :port)
 
-    # Off only when this app is embedded in another app's OTP release as a
-    # library - see config/runtime.exs. Default true: under Mix every app serves.
+    # Off inside another app's OTP release, where this app is a library
+    # (config/runtime.exs), and in the test VM (config/test.exs). Default
+    # true: under Mix every app serves.
     defp serve?, do: Application.get_env(:demo_module_b, :serve, true)
 end

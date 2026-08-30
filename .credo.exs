@@ -23,11 +23,11 @@
                 #
                 included: [
                     "lib/",
-                    "formatter/",
                     "src/",
                     "test/",
                     "web/",
                     "apps/*/lib/",
+                    "apps/*/formatter/",
                     "apps/*/src/",
                     "apps/*/test/",
                     "apps/*/web/"

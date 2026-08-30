@@ -1,4 +1,10 @@
 defmodule SetmyInfo.DemoModuleD.IntegrationTest do
+    @moduledoc """
+    Integration tier: this tier only calls the public API the module exposes,
+    the same contract a real caller gets, never reaching into internals the way
+    a unit test may.
+    """
+
     use ExUnit.Case, async: true
 
     @moduletag :integration

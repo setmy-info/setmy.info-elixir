@@ -93,8 +93,8 @@ defmodule SetmyInfo.Commons.String.OperationsTest do
             assert Operations.yaml_to_object(nil) == %{}
 
             assert Operations.yaml_to_object("person:\n    name: John Doe\n    city: Tallinn") == %{
-               "person" => %{"name" => "John Doe", "city" => "Tallinn"}
-             }
+                     "person" => %{"name" => "John Doe", "city" => "Tallinn"}
+                   }
         end
     end
 

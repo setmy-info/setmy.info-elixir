@@ -389,7 +389,7 @@ defmodule SetmyInfo.Elixir.MixProject do
 
                 {output, status} ->
                     Mix.raise("mix sbom.cyclonedx failed for #{app} (exit #{status}):\n#{output}")
-      end
+            end
         end
     end
 
@@ -405,7 +405,7 @@ defmodule SetmyInfo.Elixir.MixProject do
 
             {output, status} ->
                 Mix.raise("mix deps.tree failed (exit #{status}):\n#{output}")
-    end
+        end
     end
 
     # `mix` is `mix.bat` on Windows; find_executable resolves whichever is there.

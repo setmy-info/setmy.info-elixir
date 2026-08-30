@@ -28,8 +28,9 @@ no workspace-linking problem to solve the way npm/`pip` had to.
 Each demo app is a real OTP application: its `mod:` callback starts a supervision tree with one `Plug.Cowboy` endpoint
 serving that app's `priv/web/index.html` on its own port (`48101`/`48111`/`48121`/`48131` for a/b/c/d, set in
 `config/config.exs`). Anything that starts the application gets the endpoint — `iex -S mix`, `mix run --no-halt`, or the
-release. In the integration and e2e tiers, though, the test VM runs with `--no-start` and the HTTP requests go to the
-release daemons brought up by the pre steps of `lifecycle.exs` (see "Tests").
+release — except the test VM, where `config/test.exs` turns serving off. In the integration and e2e tiers the test VM
+runs with `--no-start` anyway, and the HTTP requests go to the release daemons brought up by the pre steps of
+`lifecycle.exs` (see "Tests").
 
 ## Getting started
 
@@ -51,10 +52,11 @@ per-app `.formatter.exs` files list the plugin, so `mix format` and `mix format 
 `elixirc_paths` entry) but is not in the Hex package.
 
 `mix format` keeps two caches under `_build/dev/.mix/` — the evaluated `.formatter.exs` files and the time of the last
-run, so only files changed since then are looked at. After editing the plugin, clear them and reformat:
+run, so only files changed since then are looked at — and it loads the plugin from the already compiled beam, so an
+edited plugin is not recompiled by `mix format` itself. After editing the plugin: compile, clear the caches, reformat:
 
 ```sh
-rm -f _build/dev/.mix/format_timestamp _build/dev/.mix/cached_dot_formatter && mix format
+mix compile && rm -f _build/dev/.mix/format_timestamp _build/dev/.mix/cached_dot_formatter && mix format
 ```
 
 Formatting is a **local** concern: `mix format` rewrites the files, and CI only verifies with
@@ -191,7 +193,8 @@ both tiers, a step shared by their pre (or post) phases runs once.
 Inside a release only the release's own app opens its endpoint: `demo_module_c`'s release also starts `a` and `b`
 (Mix will not let a `:permanent` app's dependencies be merely loaded), but there they are libraries, and a second copy
 of `a`'s endpoint next to `a`'s own release would fail with `:eaddrinuse`. `config/runtime.exs` switches
-`serve: false` for every app except `RELEASE_NAME`; under Mix every app serves.
+`serve: false` for every app except `RELEASE_NAME`; under Mix every app serves, except in the test VM
+(`config/test.exs`).
 
 Every run also writes **JUnit XML**, one file per app, to `reports/junit/` (`junit_formatter`, wired in each app's
 `test_helper.exs`, directory pinned in `config/test.exs`) — what Jenkins' `junit` step reads. The file name comes from

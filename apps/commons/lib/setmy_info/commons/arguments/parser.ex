@@ -72,7 +72,7 @@ defmodule SetmyInfo.Commons.Arguments.Parser do
     @spec summary([Argument.t()]) :: String.t()
     def summary(arguments_config) do
         Enum.map_join(arguments_config, "\n", &Argument.summary_line/1)
-  end
+    end
 
     defp option_value_at(argv, token, index, option_name) do
         cond do
