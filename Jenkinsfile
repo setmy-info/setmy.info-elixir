@@ -7,6 +7,21 @@ def runCommand(String command) {
     }
 }
 
+// One command with extra environment variables. `withEnv` would be the idiomatic Jenkins
+// step, but it IS a step: a runner that does not implement it drops the variables silently
+// and runs the body without them - the command then either fails (HEX_BUILD, see
+// apps/demo_module_c/mix.exs) or quietly does the wrong thing (JUNIT_REPORT_FILE: every
+// tier overwrites one file). Setting them in the command line itself needs no step, and is
+// written per platform: a Bourne-shell prefix under sh, `set VAR=value&&` under bat - the
+// shell prefix alone would do nothing on a Windows agent.
+def runCommand(Map variables, String command) {
+    if (isUnix()) {
+        sh variables.collect { name, value -> "${name}=${value}" }.join(' ') + ' ' + command
+    } else {
+        bat variables.collect { name, value -> "set ${name}=${value}&& " }.join('') + command
+    }
+}
+
 // Publishing needs a Hex API key; without one `mix hex.publish` blocks on an interactive
 // authentication prompt, so the stage says what it skipped instead of hanging the build.
 // `hex.publish package`, not bare `hex.publish`: the bare form also builds docs, and ex_doc
@@ -14,9 +29,7 @@ def runCommand(String command) {
 // published separately (doc/ is archived; a docs target is not wired up yet).
 void publishPackages() {
     if (env.HEX_API_KEY) {
-        withEnv(['HEX_BUILD=1']) {
-            runCommand 'mix cmd mix hex.publish package --yes'
-        }
+        runCommand([HEX_BUILD: '1'], 'mix cmd mix hex.publish package --yes')
     } else {
         echo 'HEX_API_KEY is not set - skipping mix hex.publish. The Build stage already built every tarball.'
     }
@@ -264,16 +277,12 @@ pipeline {
                 runCommand 'mix compile --warnings-as-errors'
                 // test-compile: the same compile under the test Mix env, so that test-only
                 // compile errors surface here, before any test tier runs.
-                withEnv(['MIX_ENV=test']) {
-                    runCommand 'mix compile --warnings-as-errors'
-                }
+                runCommand([MIX_ENV: 'test'], 'mix compile --warnings-as-errors')
 
                 echo 'Put here unit tests'
                 // JUNIT_REPORT_FILE: one JUnit file per tier under reports/junit/, otherwise
                 // every tier overwrites the previous one and the junit step sees only the last.
-                withEnv(['JUNIT_REPORT_FILE=unit.xml']) {
-                    runCommand 'mix test.unit'
-                }
+                runCommand([JUNIT_REPORT_FILE: 'unit.xml'], 'mix test.unit')
 
                 echo 'Put here integration tests. Previous steps can be merged here.'
                 // pre-integration-test / integration-test / post-integration-test, the way
@@ -285,9 +294,7 @@ pipeline {
                 // here so each is its own line in the build log. A failing tier leaves pre's
                 // work in place - post { always } below runs the post phases again.
                 runCommand 'mix pre-integration-test'
-                withEnv(['JUNIT_REPORT_FILE=integration.xml']) {
-                    runCommand 'mix test --only integration --no-start'
-                }
+                runCommand([JUNIT_REPORT_FILE: 'integration.xml'], 'mix test --only integration --no-start')
                 runCommand 'mix post-integration-test'
 
                 echo 'Put here mutation tests'
@@ -308,9 +315,7 @@ pipeline {
                 // XML instead, when a Sonar step is wired in.)
                 // The coverage run inside `mix reports` re-runs every tier; its JUnit output
                 // goes to a file the junit step below does not read, so no test is counted twice.
-                withEnv(['JUNIT_REPORT_FILE=coverage-run.xml']) {
-                    runCommand 'mix reports'
-                }
+                runCommand([JUNIT_REPORT_FILE: 'coverage-run.xml'], 'mix reports')
 
                 echo 'Put here site deploy'
                 echo 'Not wired to a target yet - doc/, cover/ and reports/ are archived by post { always } below'
@@ -318,9 +323,7 @@ pipeline {
                 echo 'Put here e2e tests'
                 // pre-e2e-test / e2e / post-e2e-test, same shape as the integration tier.
                 runCommand 'mix pre-e2e-test'
-                withEnv(['JUNIT_REPORT_FILE=e2e.xml']) {
-                    runCommand 'mix test --only e2e --no-start'
-                }
+                runCommand([JUNIT_REPORT_FILE: 'e2e.xml'], 'mix test --only e2e --no-start')
                 runCommand 'mix post-e2e-test'
 
                 echo 'Put here system tests'
@@ -330,9 +333,7 @@ pipeline {
                 // One Hex tarball per app. HEX_BUILD switches the in_umbrella sibling deps to
                 // their published Hex names; see apps/demo_module_c/mix.exs for why it is not
                 // always on.
-                withEnv(['HEX_BUILD=1']) {
-                    runCommand 'mix cmd mix hex.build'
-                }
+                runCommand([HEX_BUILD: '1'], 'mix cmd mix hex.build')
 
                 echo 'Put here local publishing'
                 echo 'Nothing to publish locally: Hex has no local repository, the tarballs above are the local result'
@@ -397,8 +398,9 @@ pipeline {
                 Stages to deploy/install artifacts to different environments.
                 One OTP release per app, built for the target environment (`mix release.all`).
                 Installing them on a real host is not wired up yet.
-                withEnv, not a `VAR=value command` shell prefix: that prefix is Bourne-shell
-                syntax and does nothing under bat on a Windows agent.
+                The environment goes through runCommand's Map form, which writes the prefix
+                the agent's shell understands - a bare `VAR=value command` string would be
+                Bourne-shell syntax and do nothing under bat on a Windows agent.
                 */
                 stage('dev') {
                     when {
@@ -407,9 +409,7 @@ pipeline {
                     }
                     steps {
                         echo 'Put here software development installations steps'
-                        withEnv(['MIX_ENV=dev']) {
-                            runCommand 'mix release.all --overwrite'
-                        }
+                        runCommand([MIX_ENV: 'dev'], 'mix release.all --overwrite')
                     }
                 }
                 stage('test') {
@@ -431,9 +431,7 @@ pipeline {
                     }
                     steps {
                         echo 'Put here software test installations steps'
-                        withEnv(['MIX_ENV=test']) {
-                            runCommand 'mix release.all --overwrite'
-                        }
+                        runCommand([MIX_ENV: 'test'], 'mix release.all --overwrite')
                     }
                 }
                 stage('prelive') {
@@ -451,9 +449,7 @@ pipeline {
                     }
                     steps {
                         echo 'Put here software prelive installations steps'
-                        withEnv(['MIX_ENV=prelive']) {
-                            runCommand 'mix release.all --overwrite'
-                        }
+                        runCommand([MIX_ENV: 'prelive'], 'mix release.all --overwrite')
                     }
                 }
                 stage('live') {
@@ -463,9 +459,7 @@ pipeline {
                     }
                     steps {
                         echo 'Put here software production installations steps'
-                        withEnv(['MIX_ENV=live']) {
-                            runCommand 'mix release.all --overwrite'
-                        }
+                        runCommand([MIX_ENV: 'live'], 'mix release.all --overwrite')
                     }
                 }
             }

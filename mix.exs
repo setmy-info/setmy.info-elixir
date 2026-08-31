@@ -415,6 +415,11 @@ defmodule SetmyInfo.Elixir.MixProject do
         [
             plt_local_path: "_build/plts",
             plt_core_path: "_build/plts",
+            # :mix is not a runtime dependency of any app, so it is not in the
+            # PLT by default - but commons compiles the `mix format` plugin
+            # (apps/commons/formatter/), which implements Mix.Tasks.Format and
+            # calls Mix.shell/0.
+            plt_add_apps: [:mix],
             flags: [:error_handling]
         ]
     end

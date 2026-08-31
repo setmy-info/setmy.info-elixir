@@ -50,8 +50,8 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpacesTest do
         formatted = format(source)
 
         assert format(formatted) == formatted
-        assert eval(formatted) == eval(source)
-        assert eval(source) == {"a\n  b", "c\n  d", ~c"e\n  f", "g1h\n  i"}
+        assert values(formatted) == values(source)
+        assert values(source) == {"a\n  b", "c\n  d", ~c"e\n  f", "g1h\n  i"}
     end
 
     test "an escaped newline in a one-line string does not swallow the next line" do
@@ -69,8 +69,7 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpacesTest do
                  "defmodule A do\n    def f do\n        \"a\#{\"}\"}b\n  c\"\n    end\nend\n"
 
         assert format(formatted) == formatted
-        assert {{:module, _, _, _}, _} = Code.eval_string(formatted)
-        assert A.f() == "a}b\n  c"
+        assert eval_f(formatted) == "a}b\n  c"
     end
 
     defp module_doc(source) do
@@ -79,11 +78,24 @@ defmodule SetmyInfo.Elixir.Formatter.FourSpacesTest do
     end
 
     # Regex structs never compare equal, so the regex is reduced to its source.
-    defp eval(source) do
-        {{:module, mod, _, _}, _} = Code.eval_string(source)
-        {a, regex, c, d} = mod.f()
-        :code.purge(mod)
-        :code.delete(mod)
+    defp values(source) do
+        {a, regex, c, d} = eval_f(source)
         {a, Regex.source(regex), c, d}
+    end
+
+    # Every evaluated snippet gets a module name of its own: the suite is async,
+    # so two tests defining `A` at once would race and warn about redefining it.
+    # The call goes through the variable rather than a literal `A.f()`, which
+    # names a module that does not exist when this file is compiled.
+    defp eval_f(source) do
+        name = "FourSpacesSubject#{System.unique_integer([:positive])}"
+
+        {{:module, module, _, _}, _} =
+            source |> String.replace("defmodule A do", "defmodule #{name} do") |> Code.eval_string()
+
+        result = module.f()
+        :code.purge(module)
+        :code.delete(module)
+        result
     end
 end

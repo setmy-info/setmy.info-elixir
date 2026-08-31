@@ -74,10 +74,32 @@ defmodule DemoModuleC.MixProject do
     #
     #     HEX_BUILD=1 mix hex.publish package
     defp sibling(app, hex_package) do
-        if System.get_env("HEX_BUILD") in [nil, ""] do
-            {app, "~> 1.0", in_umbrella: true}
-        else
-            {app, "~> 1.0", in_umbrella: true, hex: hex_package}
+        cond do
+            System.get_env("HEX_BUILD") not in [nil, ""] ->
+                {app, "~> 1.0", in_umbrella: true, hex: hex_package}
+
+            # Packaging without it would fail several screens later, in Hex's
+            # own words ("Dependencies excluded from the package"), naming the
+            # siblings but not the reason. Say it here instead.
+            packaging?() ->
+                Mix.raise(
+                    "demo_module_c depends on umbrella siblings, so packaging it needs " <>
+                        "HEX_BUILD=1 (see \"Why HEX_BUILD\" in the umbrella README):\n\n" <>
+                        "    HEX_BUILD=1 mix #{Enum.join(System.argv(), " ")}\n"
+                )
+
+            true ->
+                {app, "~> 1.0", in_umbrella: true}
+        end
+    end
+
+    # `mix hex.build` / `mix hex.publish`, run in this app's directory or by
+    # `mix cmd` from the umbrella root - not `hex.audit` and friends, which
+    # never look at the package's dependency list.
+    defp packaging? do
+        case System.argv() do
+            [task | _] -> task in ["hex.build", "hex.publish"]
+            _ -> false
         end
     end
 end
