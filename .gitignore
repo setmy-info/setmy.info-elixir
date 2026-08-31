@@ -1,38 +1,33 @@
+# Mix / Hex build output
 /_build
-/cover
 /deps
-/doc
 /.fetch
-erl_crash.dump
 *.ez
 *.beam
+
+# `mix hex.build` leaves <package>-<version>.tar in the app directory
+*.tar
+
+# ExDoc (`mix docs`), ExCoveralls (`mix coverage`), JUnit XML, SBOM,
+# vulnerability reports and dependency tree (`mix reports`) output
+/doc
+**/doc/
+/cover
+**/cover/
+/reports
+
+# Runtime secrets
 /config/*.secret.exs
+
+erl_crash.dump
+
+# Editors / language servers
 .elixir_ls/
-
-# Lifecycle tool output (packaged tarballs, deploy descriptors, signatures,
-# site reports) - unanchored, generated per-app (apps/<name>/docs/) as well
-# as at the repo root. Same category of gap the JS/Python sides each hit and
-# fixed once already - added proactively here instead of waiting to find it.
-.artifacts/
-.deploy/
-.signatures/
-docs/
-
-# mix resources' profile-filtered output (apps/<name>/priv/resources/<profile>/)
-# - generated, environment-specific, must never be committed as if source nor
-# shipped in a package (requirements-rules.md §6.6 in setmy.info-js; the
-# package side is handled by each app's explicit package files: allowlist).
-# `**/` prefix required: a gitignore pattern containing a mid-path slash is
-# anchored to this file's directory, so a bare `priv/resources/` would only
-# match at the repo root, not under apps/* - verified with git check-ignore,
-# not assumed.
-**/priv/resources/
-
-**/cover/*
-**.tar
-
-.idea
-**/*.iml
+.lexical/
+.idea/
+*.iml
+.lsp/
+.vscode/
 
 claude.session.sh
 claude.session.cmd

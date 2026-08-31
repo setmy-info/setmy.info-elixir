@@ -1,0 +1,20 @@
+defmodule SetmyInfo.DemoModuleD.Web do
+    @moduledoc """
+    Serves `demo_module_d`'s `priv/web` directory over HTTP.
+
+    `Plug.Static` does not map a bare `/` to `index.html` on its own, hence
+    the `:index` plug in front of it; anything it does not serve falls through
+    to a plain 404.
+    """
+
+    use Plug.Builder
+
+    plug(:index)
+    plug(Plug.Static, at: "/", from: {:demo_module_d, "priv/web"})
+    plug(:not_found)
+
+    defp index(%Plug.Conn{path_info: []} = conn, _opts), do: %{conn | path_info: ["index.html"]}
+    defp index(conn, _opts), do: conn
+
+    defp not_found(conn, _opts), do: send_resp(conn, 404, "Not Found")
+end

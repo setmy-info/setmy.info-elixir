@@ -1,9 +1,8 @@
+# Umbrella root: format the root files here and delegate every app to its own
+# .formatter.exs, the way `mix new --umbrella` sets it up. The plugin widens
+# indentation to 4 spaces; see apps/commons/formatter/.
 [
-  inputs: [
-    "{mix,.formatter}.exs",
-    "{config,lib,test}/**/*.{ex,exs}",
-    "apps/*/{mix,.formatter}.exs",
-    "apps/*/lib/**/*.{ex,exs}",
-    "apps/*/test/**/*.{ex,exs}"
-  ]
+    plugins: [SetmyInfo.Elixir.Formatter.FourSpaces],
+    inputs: ["*.{ex,exs}", ".{formatter,credo}.exs", "config/*.exs"],
+    subdirectories: ["apps/*"]
 ]

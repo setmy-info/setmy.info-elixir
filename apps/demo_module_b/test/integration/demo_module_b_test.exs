@@ -1,13 +1,21 @@
 defmodule SetmyInfo.DemoModuleB.IntegrationTest do
-  use ExUnit.Case, async: true
+    @moduledoc """
+    Integration tier: this tier only calls the public API the module exposes,
+    the same contract a real caller gets, never reaching into internals the way
+    a unit test may.
+    """
 
-  test "module b public API" do
-    assert SetmyInfo.DemoModuleB.create_message() == "message from demo_module_b"
-    assert SetmyInfo.DemoModuleB.foo() == "foo() from demo_module_b"
+    use ExUnit.Case, async: true
 
-    assert SetmyInfo.DemoModuleB.create_descriptor() == %{
-             module: "b",
-             message: "message from demo_module_b"
-           }
-  end
+    @moduletag :integration
+
+    test "module b public API" do
+        assert SetmyInfo.DemoModuleB.create_message() == "message from demo_module_b"
+        assert SetmyInfo.DemoModuleB.foo() == "foo() from demo_module_b"
+
+        assert SetmyInfo.DemoModuleB.create_descriptor() == %{
+                 module: "b",
+                 message: "message from demo_module_b"
+               }
+    end
 end

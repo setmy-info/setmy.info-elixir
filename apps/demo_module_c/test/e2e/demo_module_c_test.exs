@@ -1,11 +1,13 @@
 defmodule SetmyInfo.DemoModuleC.E2eTest do
-  use ExUnit.Case, async: true
+    use ExUnit.Case, async: true
 
-  test "module c public API e2e" do
-    message = SetmyInfo.DemoModuleC.create_message()
-    assert message =~ "message from demo_module_a"
-    assert message =~ "message from demo_module_b"
-    assert SetmyInfo.DemoModuleC.foo() == "foo() from demo_module_c"
-    assert SetmyInfo.DemoModuleC.create_descriptor() == %{module: "c", message: message}
-  end
+    @moduletag :e2e
+
+    test "module c public API e2e" do
+        message = SetmyInfo.DemoModuleC.create_message()
+        assert message =~ "message from demo_module_a"
+        assert message =~ "message from demo_module_b"
+        assert SetmyInfo.DemoModuleC.foo() == "foo() from demo_module_c"
+        assert SetmyInfo.DemoModuleC.create_descriptor() == %{module: "c", message: message}
+    end
 end
