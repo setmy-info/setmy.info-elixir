@@ -43,6 +43,8 @@ defmodule SetmyInfo.Commons.Config.Application do
         Application.get(app, ["smi", "server", "port"], 8080)
     """
 
+    require Logger
+
     alias SetmyInfo.Commons.Arguments.Config, as: ArgumentsConfig
     alias SetmyInfo.Commons.Arguments.Constants, as: ArgumentsConstants
     alias SetmyInfo.Commons.Arguments.Parser, as: ArgumentsParser
@@ -126,14 +128,26 @@ defmodule SetmyInfo.Commons.Config.Application do
         }
     end
 
-    @doc "Reads a value out of the merged configuration by path."
+    @doc """
+    Reads a value out of the merged configuration by path. Returns `default`
+    when the path is absent, when a value on the way is not a map (a malformed
+    file can turn a subtree into a scalar - see `merge_config/1`), and when
+    the leaf is an explicit YAML `null`; `null` and "missing" are deliberately
+    indistinguishable here, matching both older rows.
+    """
     @spec get(t(), [String.t()], term()) :: term()
     def get(%__MODULE__{merged_configuration: configuration}, path, default \\ nil) do
-        case get_in(configuration, path) do
+        case dig(configuration, path) do
             nil -> default
             value -> value
         end
     end
+
+    # `get_in/2` raises on a scalar in the middle of the path; this walk
+    # treats it as "not there", which is what a config lookup means by it.
+    defp dig(value, []), do: value
+    defp dig(map, [key | rest]) when is_map(map), do: dig(Map.get(map, key), rest)
+    defp dig(_non_map, _path), do: nil
 
     @doc """
     The last argument that is a non-empty list, or `[]`. Port of
@@ -158,12 +172,35 @@ defmodule SetmyInfo.Commons.Config.Application do
     def merge_maps(left, nil), do: left
     def merge_maps(_left, right), do: right
 
-    @doc "Folds the `{path, parsed}` pairs into one configuration map, in load order."
+    @doc """
+    Folds the `{path, parsed}` pairs into one configuration map, in load order.
+
+    Only maps take part: YAML's leniency lets accidental garbage parse
+    "successfully" as one scalar string, and (right side winning) a bare
+    `merge_maps/2` would then replace everything loaded before it. A file that
+    exists but parsed to `nil` or to a non-map is logged and skipped - a
+    silently vanishing config file is the worst kind of miss.
+    """
     @spec merge_config([{Path.t(), term()}]) :: map()
     def merge_config(applications_files_contents) do
-        applications_files_contents
-        |> Enum.map(fn {_path, parsed} -> parsed end)
-        |> Enum.reduce(%{}, fn parsed, acc -> merge_maps(acc, parsed) end)
+        Enum.reduce(applications_files_contents, %{}, fn
+            {_path, parsed}, acc when is_map(parsed) ->
+                merge_maps(acc, parsed)
+
+            {path, nil}, acc ->
+                if File.regular?(path),
+                    do: Logger.warning("Config file #{path} could not be parsed - ignored")
+
+                acc
+
+            {path, parsed}, acc ->
+                Logger.warning(
+                    "Config file #{path} does not contain a map at the top level " <>
+                        "(got: #{inspect(parsed)}) - ignored"
+                )
+
+                acc
+        end)
     end
 
     @doc """

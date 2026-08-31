@@ -20,6 +20,7 @@ end
 # to demo_module_a's own release fails with :eaddrinuse. Under Mix RELEASE_NAME
 # is unset: every app serves in dev (`iex -S mix`), none under `mix test`
 # (config/test.exs).
+# App list: keep in sync with config/config.exs (see the note there).
 if release = System.get_env("RELEASE_NAME") do
     for app <- [:demo_module_a, :demo_module_b, :demo_module_c, :demo_module_d] do
         config app, serve: Atom.to_string(app) == release

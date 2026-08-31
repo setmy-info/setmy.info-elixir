@@ -88,6 +88,7 @@ defmodule SetmyInfo.Elixir.MixProject do
                 "deps.audit": :dev,
                 audit: :dev,
                 quality: :dev,
+                "test.compile": :test,
                 "test.unit": :test,
                 "test.integration": :test,
                 "test.e2e": :test,
@@ -137,6 +138,11 @@ defmodule SetmyInfo.Elixir.MixProject do
     # that wants each step to be its own line in the build log.
     defp aliases do
         [
+            # Compiles the test env - test files included - without running anything, so a
+            # warning in a test file fails the build on its own line. A task rather than
+            # `MIX_ENV=test mix compile` in CI: an environment prefix is Bourne-shell syntax,
+            # and the pipeline must run on a Windows agent too (`bat`).
+            "test.compile": ["compile --warnings-as-errors"],
             "test.unit": ["test"],
             "pre-integration-test": Lifecycle.steps(:pre_integration_test),
             "post-integration-test": Lifecycle.steps(:post_integration_test),
@@ -163,6 +169,10 @@ defmodule SetmyInfo.Elixir.MixProject do
             audit: ["deps.audit --ignore-file .mix_audit_ignore", "hex.audit"],
             # Module dependency cycles are a design smell; none are allowed.
             "xref.cycles": ["xref graph --format cycles --fail-above 0"],
+            # The tier a test runs in is its TAG; the directory under test/ is
+            # readability only. Nothing in ExUnit ties the two together, so this
+            # check does - see check_test_tiers/1.
+            "test.tiers": [&check_test_tiers/1],
             # CycloneDX SBOM, one per app (each app is its own artifact - Hex package
             # and release), into reports/sbom/<app>.xml, generated from inside each
             # app directory with `-l prod`. Known limitation: the umbrella shares one
@@ -191,17 +201,82 @@ defmodule SetmyInfo.Elixir.MixProject do
             # Traversal.FileModule finding. It stays printed, it just does not fail
             # the build.
             sobelow: ["cmd mix sobelow --exit medium"],
+            # Build every app's Hex tarball, and publish them, with HEX_BUILD set for
+            # exactly these two runs and nothing else. The variable makes demo_module_c's
+            # and demo_module_d's `sibling/2` add the `:hex` option their siblings need to
+            # be packageable - which also makes Hex resolve those siblings' OWN deps from
+            # the registry, so anything that COMPILES with it set (a plain `mix compile`, a
+            # tier, `mix cmd` over the apps) fails. That is why it is not a CI-wide
+            # environment variable: `mix cmd` runs each app as a subprocess, which inherits
+            # what is set here, so the blast radius stays inside the alias.
+            package: [&hex_build/1, "cmd mix hex.build"],
+            "package.publish": [&hex_build/1, "cmd mix hex.publish package --yes"],
             quality: [
                 "format --check-formatted",
                 "compile --warnings-as-errors",
                 "credo --strict",
                 "dialyzer",
                 "xref.cycles",
+                "test.tiers",
                 "sobelow",
                 "audit"
             ]
         ]
     end
+
+    defp hex_build(_args), do: System.put_env("HEX_BUILD", "1")
+
+    @tiers_with_tag %{"integration" => :integration, "e2e" => :e2e}
+    @tier_directories ["unit" | Map.keys(@tiers_with_tag)]
+
+    # Which tier a test belongs to is decided by its TAG - `@moduletag
+    # :integration` / `:e2e`, excluded by default in each app's
+    # test_helper.exs. The directory split under test/ is for readability, and
+    # ExUnit knows nothing about it, so the two can silently disagree: a file
+    # dropped into test/integration/ without the tag joins the UNIT tier
+    # instead. It then runs on every `mix test`, `mix test.integration` never
+    # sees it, and nothing goes red - the tier separation quietly stops being
+    # true. The reverse is just as bad: a `:e2e` tag on a file in test/unit/
+    # takes it out of every default run.
+    #
+    # This check is what makes the layout binding, and why the tiers can be
+    # described as strictly separated rather than merely conventionally so.
+    defp check_test_tiers(_args) do
+        problems = "apps/*/test/**/*_test.exs" |> Path.wildcard() |> Enum.flat_map(&tier_problems/1)
+
+        if problems == [] do
+            Mix.shell().info("Test tiers: directory and @moduletag agree in every test file.")
+        else
+            Mix.raise("Test tier layout violations:\n\n" <> Enum.join(problems, "\n") <> "\n")
+        end
+    end
+
+    defp tier_problems(path) do
+        case Path.split(path) do
+            ["apps", _app, "test", tier | _rest] when tier in @tier_directories ->
+                tag_problems(path, tier, File.read!(path))
+
+            _other ->
+                ["  #{path}: not under test/#{Enum.join(@tier_directories, "/, test/")}/"]
+        end
+    end
+
+    defp tag_problems(path, "unit", source) do
+        for {directory, tag} <- @tiers_with_tag, tagged?(source, tag) do
+            "  #{path}: unit-tier file carries @moduletag #{inspect(tag)}" <>
+                " - move it to test/#{directory}/ or drop the tag"
+        end
+    end
+
+    defp tag_problems(path, tier, source) do
+        tag = Map.fetch!(@tiers_with_tag, tier)
+
+        if tagged?(source, tag),
+            do: [],
+            else: ["  #{path}: missing @moduletag #{inspect(tag)} - it would run in the unit tier"]
+    end
+
+    defp tagged?(source, tag), do: Regex.match?(~r/@moduletag\s+#{inspect(tag)}\b/, source)
 
     # Runs `task` inside the lifecycle of the given tiers: all their pre steps,
     # the task, then all their post steps - the post steps in a `try/after`, so
@@ -246,7 +321,14 @@ defmodule SetmyInfo.Elixir.MixProject do
     #
     # `commons` has no release of its own on purpose - it is a library, consumed
     # as the Hex package `setmy_info_commons`, not run.
+    # This list also exists, necessarily inline, in config/config.exs (ports),
+    # config/test.exs (serve: false) and config/runtime.exs (serve per release);
+    # config files cannot read module attributes, so adding an app means all four.
     @deployable_apps [:demo_module_a, :demo_module_b, :demo_module_c, :demo_module_d]
+
+    # Everything that ships and therefore gets an SBOM and security reports:
+    # the deployable apps plus the published libraries.
+    @report_apps @deployable_apps ++ [:commons, :formatter]
 
     defp releases do
         Map.new(@deployable_apps, fn app ->
@@ -347,7 +429,9 @@ defmodule SetmyInfo.Elixir.MixProject do
     end
 
     # The tools' own exit codes are deliberately ignored here: a report of a
-    # finding is still a report. Failing on findings is what `mix quality` does.
+    # finding is still a report, and failing on findings is what `mix quality`
+    # does. "The tool produced no report at all" is a different thing - an
+    # empty or missing file archived as if it were real - and that DOES fail.
     defp security_reports(_args) do
         dir = "reports/security"
         File.mkdir_p!(dir)
@@ -356,17 +440,25 @@ defmodule SetmyInfo.Elixir.MixProject do
         audit_args = ["deps.audit", "--format", "json", "--ignore-file", ".mix_audit_ignore"]
         {audit, _} = System.cmd(mix_executable(), audit_args, env: env)
 
+        if String.trim(audit) == "" do
+            Mix.raise("mix deps.audit produced no JSON output - deps_audit.json would be empty")
+        end
+
         File.write!(Path.join(dir, "deps_audit.json"), audit)
         Mix.shell().info("Wrote #{dir}/deps_audit.json")
 
-        for app <- @deployable_apps ++ [:commons] do
+        for app <- @report_apps do
             out = Path.expand(Path.join(dir, "sobelow-#{app}.json"))
 
-            {_, _} =
+            {output, _} =
                 System.cmd(mix_executable(), ["sobelow", "--format", "json", "--out", out],
                     cd: Path.join("apps", to_string(app)),
                     env: env
                 )
+
+            unless File.regular?(out) do
+                Mix.raise("mix sobelow wrote no report for #{app}:\n#{output}")
+            end
 
             Mix.shell().info("Wrote #{Path.relative_to_cwd(out)}")
         end
@@ -376,7 +468,7 @@ defmodule SetmyInfo.Elixir.MixProject do
         dir = Path.expand("reports/sbom")
         File.mkdir_p!(dir)
 
-        for app <- @deployable_apps ++ [:commons] do
+        for app <- @report_apps do
             out = Path.join(dir, "#{app}.xml")
 
             case System.cmd(mix_executable(), ["sbom.cyclonedx", "-f", "-l", "prod", "-o", out],
@@ -416,9 +508,9 @@ defmodule SetmyInfo.Elixir.MixProject do
             plt_local_path: "_build/plts",
             plt_core_path: "_build/plts",
             # :mix is not a runtime dependency of any app, so it is not in the
-            # PLT by default - but commons compiles the `mix format` plugin
-            # (apps/commons/formatter/), which implements Mix.Tasks.Format and
-            # calls Mix.shell/0.
+            # PLT by default - but the formatter app is the `mix format` plugin
+            # (apps/formatter), which implements Mix.Tasks.Format and calls
+            # Mix.shell/0.
             plt_add_apps: [:mix],
             flags: [:error_handling]
         ]

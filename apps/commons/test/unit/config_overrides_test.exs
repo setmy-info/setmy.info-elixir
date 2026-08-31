@@ -87,10 +87,17 @@ defmodule SetmyInfo.Commons.Config.OverridesTest do
                    }
         end
 
-        test "an unparseable value for a typed key falls back to the configured one" do
-            overrides = environment_collect(@config, ["smi"], %{"SMI_SERVER_PORT" => "not-a-number"})
+        test "an unparseable value for a typed key raises, naming the variable and the path" do
+            # One loud policy for every type: an override that silently kept the
+            # configured value would hide the typo that broke it.
+            error =
+                assert_raise ArgumentError, fn ->
+                    environment_collect(@config, ["smi"], %{"SMI_SERVER_PORT" => "not-a-number"})
+                end
 
-            assert overrides == %{["smi", "server", "port"] => 8080}
+            assert error.message =~ "SMI_SERVER_PORT"
+            assert error.message =~ "smi.server.port"
+            assert error.message =~ "not an integer"
         end
 
         test "the run-together form resolves when the split form is unset" do

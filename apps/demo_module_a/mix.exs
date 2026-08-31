@@ -46,10 +46,20 @@ defmodule DemoModuleA.MixProject do
     # resolves against that project's own deps.
     defp deps do
         [
+            # The umbrella's 4-space `mix format` plugin (apps/formatter): a build
+            # tool, so dev/test only - never in releases, never a package
+            # requirement. Declared by every app so `mix format` also works with
+            # that app as the current project (`cd apps/<name> && mix format`).
+            {:formatter, in_umbrella: true, only: [:dev, :test], runtime: false},
             {:plug_cowboy, "~> 2.7"},
             {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
             {:sbom, "~> 0.10", only: [:dev, :test], runtime: false},
-            {:excoveralls, "~> 0.18", only: :test, runtime: false}
+            {:excoveralls, "~> 0.18", only: :test, runtime: false},
+            # Also declared here, not only at the umbrella root: each app's
+            # test_helper.exs names JUnitFormatter unconditionally, and a root-only
+            # dependency is not on the code path when this app is the current
+            # project (`cd apps/<name> && mix test`).
+            {:junit_formatter, "~> 3.4", only: :test, runtime: false}
         ]
     end
 end

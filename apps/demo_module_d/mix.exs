@@ -46,15 +46,27 @@ defmodule DemoModuleD.MixProject do
     # resolves against that project's own deps.
     defp deps do
         [
+            # The umbrella's 4-space `mix format` plugin (apps/formatter): a build
+            # tool, so dev/test only - never in releases, never a package
+            # requirement. Declared by every app so `mix format` also works with
+            # that app as the current project (`cd apps/<name> && mix format`).
+            {:formatter, in_umbrella: true, only: [:dev, :test], runtime: false},
             sibling(:demo_module_c, :setmy_info_demo_module_c),
             {:plug_cowboy, "~> 2.7"},
             {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
             {:sbom, "~> 0.10", only: [:dev, :test], runtime: false},
-            {:excoveralls, "~> 0.18", only: :test, runtime: false}
+            {:excoveralls, "~> 0.18", only: :test, runtime: false},
+            # Also declared here, not only at the umbrella root: each app's
+            # test_helper.exs names JUnitFormatter unconditionally, and a root-only
+            # dependency is not on the code path when this app is the current
+            # project (`cd apps/<name> && mix test`).
+            {:junit_formatter, "~> 3.4", only: :test, runtime: false}
         ]
     end
 
-    # Umbrella siblings are declared twice over, on purpose.
+    # Umbrella siblings are declared twice over, on purpose. (This helper and
+    # packaging?/0 are mirrored in demo_module_c/mix.exs - mix.exs files are
+    # evaluated before any umbrella code is compiled, so they cannot share it.)
     #
     # `in_umbrella: true` is what makes local development work: the sibling is
     # compiled from `apps/`, no publishing round-trip in the loop.
@@ -84,7 +96,8 @@ defmodule DemoModuleD.MixProject do
                 Mix.raise(
                     "demo_module_d depends on umbrella siblings, so packaging it needs " <>
                         "HEX_BUILD=1 (see \"Why HEX_BUILD\" in the umbrella README):\n\n" <>
-                        "    HEX_BUILD=1 mix #{Enum.join(System.argv(), " ")}\n"
+                        "    HEX_BUILD=1 mix cmd mix hex.build        # from the umbrella root\n" <>
+                        "    HEX_BUILD=1 mix hex.build                # from apps/demo_module_d\n"
                 )
 
             true ->

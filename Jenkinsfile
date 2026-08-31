@@ -7,79 +7,17 @@ def runCommand(String command) {
     }
 }
 
-// One command with extra environment variables. `withEnv` would be the idiomatic Jenkins
-// step, but it IS a step: a runner that does not implement it drops the variables silently
-// and runs the body without them - the command then either fails (HEX_BUILD, see
-// apps/demo_module_c/mix.exs) or quietly does the wrong thing (JUNIT_REPORT_FILE: every
-// tier overwrites one file). Setting them in the command line itself needs no step, and is
-// written per platform: a Bourne-shell prefix under sh, `set VAR=value&&` under bat - the
-// shell prefix alone would do nothing on a Windows agent.
-def runCommand(Map variables, String command) {
-    if (isUnix()) {
-        sh variables.collect { name, value -> "${name}=${value}" }.join(' ') + ' ' + command
-    } else {
-        bat variables.collect { name, value -> "set ${name}=${value}&& " }.join('') + command
-    }
-}
-
-// Publishing needs a Hex API key; without one `mix hex.publish` blocks on an interactive
-// authentication prompt, so the stage says what it skipped instead of hanging the build.
-// `hex.publish package`, not bare `hex.publish`: the bare form also builds docs, and ex_doc
-// is an umbrella-root dependency a child app run from apps/<app> cannot see. API docs are
-// published separately (doc/ is archived; a docs target is not wired up yet).
-void publishPackages() {
-    if (env.HEX_API_KEY) {
-        runCommand([HEX_BUILD: '1'], 'mix cmd mix hex.publish package --yes')
-    } else {
-        echo 'HEX_API_KEY is not set - skipping mix hex.publish. The Build stage already built every tarball.'
-    }
-}
-
 pipeline {
 
     /*
-    setmy.info-elixir
-    version 2.3.0 - integration and e2e tiers are lifecycle phases: CI runs
-                    `mix pre-/post-integration-test` and `mix pre-/post-e2e-test`; what those
-                    do is declared per project in lifecycle.exs (currently: the release daemons).
-    version 2.2.1 - documentation coverage gate (mix doctor) removed again.
-    version 2.2.0 - full toolchain: integration and e2e tiers run against real running
-                    instances bracketed by `mix server.start` / `mix server.stop` (OTP release
-                    daemons, the failsafe pre-/post-integration-test shape), JUnit XML per app
-                    (junit step enabled), dependency cycles (xref), CycloneDX SBOM, vulnerability
-                    reports (one SBOM per app) and the dependency tree under reports/ (`mix reports`), everything
-                    archived.
-    version 2.1.0 - re-synced to jenkinsfile-starter 1.2.0 (commit 379e800): the same stages
-                    and the same steps, in the same order. Only the placeholder commands are
-                    replaced with plain Mix commands (see README.md). The separate Unit /
-                    Integration / E2E / Quality / Coverage and docs / System-Acceptance /
-                    Package / Hotfix candidate stages that 2.0.0 had are folded back into the
-                    starter's Build and Publish stages, where the starter keeps them.
-                    RELEASE_TO_DEV / HOTFIX_TO_DEV flags removed with the starter. The
-                    starter's numbered learning EXAMPLES (variable demo, sleep, retry, timeout,
-                    build-started email) and its PATH setup are left out - build tools are
-                    guaranteed on every Jenkins node.
-    version 2.0.0 - the Maven-lifecycle emulation was removed. Stages run plain Mix commands
-                    (compile, test.unit/test.integration/test.e2e, format, credo, dialyzer,
-                    sobelow, deps.audit, coveralls, docs, hex.build/hex.publish, release)
-                    instead of the custom tasks that used to live in a dev_tasks app. Servers
-                    are no longer started and stopped around the test tiers - each app
-                    supervises its own HTTP endpoint.
-    version 1.2.0 - migrated from jenkinsfile-starter's then-current Jenkinsfile (commit ad074a6)
-    version 1.1.0 - hotfix* branch support, dead MASTER_TO_PRELIVE flag removed
-    version 1.0.0 - migrated from jenkinsfile-starter for setmy.info-elixir (Mix umbrella,
-                    4-app dependency demo). No GitHub Actions workflow: this Jenkinsfile is
-                    this repo's one CI definition.
-
-    jenkinsfile-starter
     version 1.2.0 - release* no longer deploys to DEV: the RELEASE_TO_DEV flag and the release
                     branch of the 'dev' deploy stage are gone. release* deploys to TEST and
                     PRELIVE only. develop -> DEV is unchanged.
     version 1.1.0 - pollSCM instead of cron (build on new commits, not on a timer),
                     quietPeriod + disableConcurrentBuilds(abortPrevious: true) so that a burst
                     of commits becomes one build of the newest change,
-                    release* added to Publish/Snapshot (reverted again in 1.2.0: only develop
-                    publishes a snapshot)
+                    elease* added to Publish/Snapshot: develop, release* and hotfix* all publish
+                    a candidate of unknown quality
                     TEST environment renamed to the ADR-0041 canonical name
     version 1.0.1 - fileExists precondition check now actually gates (was a discarded boolean)
 
@@ -129,10 +67,6 @@ pipeline {
     [5 branches] x [4 environments]. feature* deploys nowhere: it is built and tested only.
     */
 
-    // Known limitation: the four demo endpoints bind fixed localhost ports (config/config.exs),
-    // and disableConcurrentBuilds only serialises ONE branch job. Two branch jobs building on
-    // the same agent at the same time would collide on those ports; run this pipeline on a
-    // single executor per agent, or add a Lockable Resources lock, if that ever happens.
     agent any
 
     triggers {
@@ -185,10 +119,14 @@ pipeline {
     }
 
     environment {
-        // No PATH setup: Elixir/Erlang/Mix are guaranteed on every Jenkins node.
-        // MIX_ENV is deliberately NOT set here: mix.exs' cli/preferred_envs picks the right
-        // Mix env per task (test for the test tiers, server lifecycle and reports, dev for the
-        // gates), and a global MIX_ENV would override every one of those.
+        // The 4-space `mix format` plugin (apps/formatter) falls back to stock 2-space output
+        // with a warning when widening would change a file's AST. That fallback is
+        // deterministic, so `--check-formatted` would compare it against itself and PASS -
+        // the gate could not enforce the rule it exists for. Strict turns the fallback into an
+        // error, so no file reaches master at 2 spaces.
+        FOUR_SPACES_STRICT = '1'
+
+        SMI_PROFILES = 'ci'
 
         MASTER_TO_LIVE = 'DEPLOY'
 
@@ -207,24 +145,15 @@ pipeline {
             parallel {
                 stage('Pre-build') {
                     /*
-                    Stage to get into build logs pre build existing environment conditions, versions, getting CI build
-                    info into log etc.
+                    Pre build existing environment conditions, versions, CI build info into the log.
                     */
                     steps {
                         echo "Jenkins node: ${env.NODE_NAME}"
                         echo "Operating system: ${isUnix() ? 'Unix/Linux' : 'Windows'}"
 
+                        echo 'Pre build inspection and precondition check.'
                         runCommand 'elixir --version'
-
-                        // fileExists only RETURNS a boolean - as a bare statement its result is
-                        // discarded and a missing file fails nothing. It must be wrapped to gate.
-                        script {
-                            if (!fileExists('README.md')) {
-                                error('README.md missing - checkout incomplete or wrong workspace directory')
-                            }
-                        }
-
-                        echo 'Pre build inspection and precondition check. Build tools must be installed on the agent.'
+                        runCommand 'mix --version'
                     }
                 }
                 /*
@@ -235,9 +164,6 @@ pipeline {
                         echo 'Build tools installation and preparation (setup, config)'
                         runCommand 'mix local.hex --force'
                         runCommand 'mix local.rebar --force'
-                        // After local.hex, not in Pre-build: the two run in parallel, and on a
-                        // fresh agent hex.info does not exist until Hex is installed.
-                        runCommand 'mix hex.info'
                     }
                 }
             }
@@ -253,8 +179,6 @@ pipeline {
                         echo 'Preparing the software to be built. Installation commands go here.'
                         runCommand 'mix deps.get'
                         echo 'Put here build configuration commands'
-                        // Nothing to configure: config/ is checked in and mix.exs is the build
-                        // configuration. The lockfile is checked for orphaned entries instead.
                         runCommand 'mix deps.unlock --check-unused'
                     }
                 }
@@ -262,7 +186,8 @@ pipeline {
         }
 
         /*
-        Stage to build code with with executing all needed steps to measure different type of code quality.
+        Stage to build code with executing all needed steps to measure different type of code quality.
+        Each command is its own line, so the build log names exactly what failed.
         */
         stage('Build') {
             steps {
@@ -270,80 +195,48 @@ pipeline {
                 runCommand 'mix clean'
 
                 echo 'Put here resource copy commands'
-                echo 'Nothing to copy: priv/ ships as-is and config/ is read at compile and boot time'
+                echo 'Nothing to copy: each app serves its own priv/web straight out of the app.'
 
                 echo 'Put here compilation commands. Can be omitted.'
-                runCommand 'mix format --check-formatted'
                 runCommand 'mix compile --warnings-as-errors'
-                // test-compile: the same compile under the test Mix env, so that test-only
-                // compile errors surface here, before any test tier runs.
-                runCommand([MIX_ENV: 'test'], 'mix compile --warnings-as-errors')
+                runCommand 'mix test.compile'
 
                 echo 'Put here unit tests'
-                // JUNIT_REPORT_FILE: one JUnit file per tier under reports/junit/, otherwise
-                // every tier overwrites the previous one and the junit step sees only the last.
-                runCommand([JUNIT_REPORT_FILE: 'unit.xml'], 'mix test.unit')
+                runCommand 'mix test.unit'
 
                 echo 'Put here integration tests. Previous steps can be merged here.'
-                // pre-integration-test / integration-test / post-integration-test, the way
-                // Maven's failsafe brackets them. What the pre and post phases do is the
-                // project's business, declared in lifecycle.exs (currently: build the releases
-                // and start them as daemons / stop them); CI only knows the phases. The tier
-                // runs against whatever pre set up (--no-start: no second copy in the test
-                // VM). `mix test.integration` is the same three in one alias; spelled out
-                // here so each is its own line in the build log. A failing tier leaves pre's
-                // work in place - post { always } below runs the post phases again.
-                runCommand 'mix pre-integration-test'
-                runCommand([JUNIT_REPORT_FILE: 'integration.xml'], 'mix test --only integration --no-start')
-                runCommand 'mix post-integration-test'
+                // Self-bracketing: mix.exs runs pre-integration-test before and
+                // post-integration-test after, and the post phase also on failure.
+                runCommand 'mix test.integration'
 
                 echo 'Put here mutation tests'
-                echo 'Not wired in yet'
+                echo 'No mutation testing tool for Elixir in the org toolchain yet.'
 
                 echo 'Put here reporting builds steps can include (unit tests coverage, mutation test coverage, findbugs, vuln. checks, )'
-                echo 'Containing here findbug/stopbug, check style, dependencies vulnerability checks, docs gen, etc'
-                // Gates first (each fails the build on a finding), then the documents.
-                runCommand 'mix credo --strict'
-                runCommand 'mix dialyzer'
-                runCommand 'mix xref.cycles'
-                runCommand 'mix sobelow'
-                runCommand 'mix audit'
-                // `mix reports`: ExDoc API docs (doc/), coverage over all three tiers as HTML
-                // (cover/), CycloneDX SBOM, mix_audit + Sobelow JSON vulnerability reports and
-                // the dependency tree (reports/). Coverage runs the tiers itself, with the same
-                // server lifecycle around them. (`mix coverage.xml` gives the SonarQube generic
-                // XML instead, when a Sonar step is wired in.)
-                // The coverage run inside `mix reports` re-runs every tier; its JUnit output
-                // goes to a file the junit step below does not read, so no test is counted twice.
-                runCommand([JUNIT_REPORT_FILE: 'coverage-run.xml'], 'mix reports')
+                echo 'Containing here findbug/stopbug, check style, dependencies vulnreability checks, docs gen, etc'
+                // Gates first (each fails the build on a finding), documents second.
+                runCommand 'mix format --check-formatted'
+                runCommand 'mix quality'
+                runCommand 'mix reports'
 
                 echo 'Put here site deploy'
-                echo 'Not wired to a target yet - doc/, cover/ and reports/ are archived by post { always } below'
+                echo 'No site deploy: doc/, cover/ and reports/ are archived below instead.'
 
                 echo 'Put here e2e tests'
-                // pre-e2e-test / e2e / post-e2e-test, same shape as the integration tier.
-                runCommand 'mix pre-e2e-test'
-                runCommand([JUNIT_REPORT_FILE: 'e2e.xml'], 'mix test --only e2e --no-start')
-                runCommand 'mix post-e2e-test'
+                runCommand 'mix test.e2e'
 
                 echo 'Put here system tests'
                 echo 'Put here acceptance tests'
+                echo 'System and acceptance testing are the e2e tier here - the tiers run against the release daemons.'
 
                 echo 'Put here packaging'
-                // One Hex tarball per app. HEX_BUILD switches the in_umbrella sibling deps to
-                // their published Hex names; see apps/demo_module_c/mix.exs for why it is not
-                // always on.
-                runCommand([HEX_BUILD: '1'], 'mix cmd mix hex.build')
+                runCommand 'mix package'
 
                 echo 'Put here local publishing'
-                echo 'Nothing to publish locally: Hex has no local repository, the tarballs above are the local result'
+                echo 'Nothing local to publish: Hex is the registry, see the Publish stage.'
             }
         }
 
-        // comparator: 'REGEXP' below is not decoration. The default GLOB comparator's `*` does
-        // not cross a `/`, so `branch 'release*'` does NOT match `release/1.2.0` - every publish
-        // and deployment for that branch is then silently skipped. It is easy to miss, because
-        // `devel*` keeps working: `develop` has no separator in it.
         stage('Publish') {
             parallel {
                 /*
@@ -352,11 +245,16 @@ pipeline {
                 stage('Release') {
                     when {
                         branch 'master'
-                        // changeset "**/file/to/be/changed"
+                        // Without a key `mix hex.publish` blocks on an interactive
+                        // authentication prompt, which would hang the build.
+                        expression { env.HEX_API_KEY }
                     }
                     steps {
                         echo 'Put here software release steps'
-                        publishPackages()
+                        // `hex.publish package`, not bare `hex.publish`: the bare form also
+                        // builds docs, and ex_doc is an umbrella-root dependency that an app
+                        // directory cannot see.
+                        runCommand 'mix package.publish'
                     }
                 }
                 stage('Snapshot') {
@@ -365,11 +263,9 @@ pipeline {
                     }
                     steps {
                         echo 'Put here software snapshot publishing steps'
-                        // Hex has no snapshot concept: a version can be published exactly once,
-                        // so publishing every develop build would fail from the second build
-                        // on. The snapshot IS the set of tarballs the Build stage produced and
-                        // post { always } archives; publishing happens from master.
-                        echo 'No Hex snapshot publishing - the Build stage tarballs are archived as the snapshot'
+                        // Hex has no snapshots - a version publishes exactly once - so a
+                        // development build keeps its tarballs as archived artifacts instead.
+                        echo 'Hex has no snapshots: the tarballs built above are archived by post/always.'
                     }
                 }
                 stage('Release reports') {
@@ -378,7 +274,7 @@ pipeline {
                     }
                     steps {
                         echo 'Put here reports publishing steps'
-                        echo 'Not wired to a target yet - doc/, cover/ and reports/ are archived by post { always } below'
+                        echo 'doc/, cover/ and reports/ are archived by post/always.'
                     }
                 }
                 stage('Snapshot reports') {
@@ -387,7 +283,7 @@ pipeline {
                     }
                     steps {
                         echo 'Put here reports publishing steps'
-                        echo 'Not wired to a target yet - doc/, cover/ and reports/ are archived by post { always } below'
+                        echo 'doc/, cover/ and reports/ are archived by post/always.'
                     }
                 }
             }
@@ -396,20 +292,19 @@ pipeline {
             parallel {
                 /*
                 Stages to deploy/install artifacts to different environments.
-                One OTP release per app, built for the target environment (`mix release.all`).
-                Installing them on a real host is not wired up yet.
-                The environment goes through runCommand's Map form, which writes the prefix
-                the agent's shell understands - a bare `VAR=value command` string would be
-                Bourne-shell syntax and do nothing under bat on a Windows agent.
+                One OTP release per deployable app; `mix release.all` builds them all.
                 */
                 stage('dev') {
                     when {
                         environment name: 'DEVELOPMENT_TO_DEV', value: 'DEPLOY'
                         branch pattern: 'devel.*', comparator: 'REGEXP'
                     }
+                    environment {
+                        MIX_ENV = 'dev'
+                    }
                     steps {
                         echo 'Put here software development installations steps'
-                        runCommand([MIX_ENV: 'dev'], 'mix release.all --overwrite')
+                        runCommand 'mix release.all --overwrite'
                     }
                 }
                 stage('test') {
@@ -429,9 +324,12 @@ pipeline {
                             }
                         }
                     }
+                    environment {
+                        MIX_ENV = 'test'
+                    }
                     steps {
                         echo 'Put here software test installations steps'
-                        runCommand([MIX_ENV: 'test'], 'mix release.all --overwrite')
+                        runCommand 'mix release.all --overwrite'
                     }
                 }
                 stage('prelive') {
@@ -447,9 +345,12 @@ pipeline {
                             }
                         }
                     }
+                    environment {
+                        MIX_ENV = 'prelive'
+                    }
                     steps {
                         echo 'Put here software prelive installations steps'
-                        runCommand([MIX_ENV: 'prelive'], 'mix release.all --overwrite')
+                        runCommand 'mix release.all --overwrite'
                     }
                 }
                 stage('live') {
@@ -457,9 +358,12 @@ pipeline {
                         environment name: 'MASTER_TO_LIVE', value: 'DEPLOY'
                         branch 'master'
                     }
+                    environment {
+                        MIX_ENV = 'live'
+                    }
                     steps {
                         echo 'Put here software production installations steps'
-                        runCommand([MIX_ENV: 'live'], 'mix release.all --overwrite')
+                        runCommand 'mix release.all --overwrite'
                     }
                 }
             }
@@ -482,16 +386,18 @@ pipeline {
 
     post {
         always {
-            // The post phases once more, for what a failed integration/e2e tier left behind
-            // (the steps are idempotent - see lifecycle.exs). catchError: if the build died
-            // before deps were even fetched, these aliases cannot compile - that must not
-            // hide the junit and archive steps after them.
-            catchError(buildResult: null, stageResult: null) {
-                runCommand 'mix post-integration-test'
-                runCommand 'mix post-e2e-test'
-            }
-            junit allowEmptyResults: true, testResults: 'reports/junit/*-unit.xml, reports/junit/*-integration.xml, reports/junit/*-e2e.xml'
-            archiveArtifacts artifacts: 'cover/**, doc/**, reports/**, apps/*/*.tar', allowEmptyArchive: true, fingerprint: true
+            // The tiers bracket themselves, but a run aborted between a pre and its post phase
+            // (an executor loss, abortPrevious) can leave release daemons behind. Both post
+            // phases are idempotent, so running them again here costs nothing.
+            runCommand 'mix post-integration-test'
+            runCommand 'mix post-e2e-test'
+
+            // One file per app per tier - see the tier mapping in config/test.exs.
+            junit 'reports/junit/*.xml'
+
+            archiveArtifacts artifacts: 'doc/**, cover/**, reports/**, apps/*/*.tar',
+                             allowEmptyArchive: true,
+                             fingerprint: true
         }
 
         success {

@@ -4,8 +4,8 @@
     "minimum_coverage": 90
   },
   "skip_files": [
-    "lib/setmy_info/demo_module_./application.ex",
-    "lib/setmy_info/demo_module_./web.ex"
+    "lib/setmy_info/demo_module_[a-d]/application.ex",
+    "lib/setmy_info/demo_module_[a-d]/web.ex"
   ],
   "terminal_options": {
     "print_files": true

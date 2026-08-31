@@ -12,9 +12,11 @@
 # decided here, per project. A step is either a Mix task invocation as a
 # string (`"server.start"`, `"cmd docker compose up -d"`, `"ecto.migrate"`) or
 # a `fn args -> ... end`. Steps run in list order for pre and are given in the
-# order they should run for post; a step listed in more than one pre (or
-# post) phase runs only once when the phases are combined, as in
-# `mix test.all`.
+# order they should run for post. A step listed in more than one pre (or
+# post) phase runs only once when the phases are combined (as in
+# `mix test.all`) - for string steps and captures of named functions
+# (`&Mod.fun/1`), which compare equal; two `fn -> ... end` literals never do,
+# so write a shared function step as a capture.
 #
 # In this project the running instances the integration and e2e tiers talk to
 # are OTP release daemons, so the steps are `server.start` / `server.stop`

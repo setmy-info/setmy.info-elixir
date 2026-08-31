@@ -30,7 +30,14 @@ defmodule SetmyInfo.Commons.EnvironmentCase do
         end
     end
 
-    setup do
+    setup context do
+        # The OS environment is global state: a module using this template
+        # while async would race every other running module's environment.
+        if context.async do
+            raise ArgumentError,
+                  "#{inspect(context.module)} must use #{inspect(__MODULE__)} with async: false"
+        end
+
         original = System.get_env()
 
         Enum.each(Constants.reserved_environment_variables(), &System.delete_env/1)

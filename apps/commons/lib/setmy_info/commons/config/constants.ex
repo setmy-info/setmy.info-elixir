@@ -45,13 +45,24 @@ defmodule SetmyInfo.Commons.Config.Constants do
         [@smi_config_paths, @smi_profiles, @smi_optional_config_files, @smi_name]
     end
 
+    @doc """
+    The `--smi-...` long-flag forms of `reserved_environment_variables/0`, for
+    the CLI override layer's identical guard.
+    """
+    @spec reserved_cli_options() :: [String.t()]
+    def reserved_cli_options do
+        Enum.map(reserved_environment_variables(), fn name ->
+            "--" <> (name |> String.downcase() |> String.replace("_", "-"))
+        end)
+    end
+
     @doc "Base name of the configuration files: `application` (as in `application.yml`)."
     @spec application_file_prefix() :: String.t()
     def application_file_prefix, do: @application_file_prefix
 
     @doc "`application_file_prefix/0` as a one-element list, for the file discovery's cartesian products."
     @spec application_file_prefixes() :: [String.t()]
-    def application_file_prefixes, do: [@application_file_prefix]
+    def application_file_prefixes, do: [application_file_prefix()]
 
     @doc "In overloading order - a later suffix overrides an earlier one from the same directory."
     @spec application_file_suffixes() :: [String.t()]
@@ -78,13 +89,16 @@ defmodule SetmyInfo.Commons.Config.Constants do
     def default_config_paths, do: @default_config_paths
 
     @doc """
-    Only keys under these roots can be overridden by environment variables or
-    CLI options, per the architecture index's prefix table (`smi:` in YAML,
-    `SMI_` in the environment, `--smi-` on the command line).
+    The default for `SetmyInfo.Commons.Config.Application`'s
+    `:override_root_keys` option: `["smi"]`, so only keys under that root can
+    be overridden by environment variables or CLI options, per the
+    architecture index's prefix table (`smi:` in YAML, `SMI_` in the
+    environment, `--smi-` on the command line).
 
-    `nil` means every root key, which is how Spring Boot behaves - and is
-    unsafe by default here, since a top-level `name:` key would then bind to
-    whatever `$NAME` happens to be in the shell.
+    This function always returns that list. It is the *option* that also
+    accepts `nil`, meaning every root key, which is how Spring Boot behaves -
+    and why it is not the default here: a top-level `name:` key would then
+    bind to whatever `$NAME` happens to be in the shell.
     """
     @spec default_override_root_keys() :: [String.t()]
     def default_override_root_keys, do: @default_override_root_keys

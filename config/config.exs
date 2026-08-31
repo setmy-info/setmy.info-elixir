@@ -4,6 +4,8 @@ config :logger, :console,
     format: "$date $time [$level] [$node] $metadata- $message\n",
     metadata: [:pid, :module, :function, :line]
 
+# Keep this app list in sync with config/test.exs, config/runtime.exs and
+# mix.exs' @deployable_apps - config files cannot share it programmatically.
 # Each demo app's HTTP endpoint port, read by its own supervision tree
 # (`SetmyInfo.DemoModule*.Application`). One config tree for the whole
 # umbrella (Mix convention), namespaced per app via `config :app_name, ...`

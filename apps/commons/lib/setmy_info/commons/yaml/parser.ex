@@ -13,6 +13,16 @@ defmodule SetmyInfo.Commons.Yaml.Parser do
     Keys come back as strings, matching the Python port. The Clojure port
     keywordizes them; on the BEAM that would mean `String.to_atom/1` on
     file-supplied input, i.e. an unbounded atom table.
+
+    Invalid YAML parses to `nil`, but a **missing** file - which
+    `SetmyInfo.Commons.File.Operations` reads as `""` - parses to `%{}`, since
+    `""` is a valid, empty YAML document. `SetmyInfo.Commons.Json.Parser`
+    answers `nil` in that same case; its moduledoc has the comparison table
+    and the reason.
+
+    Beware also that YAML rarely *fails*: most accidental garbage parses
+    successfully as a plain scalar string rather than a map, which is why
+    `SetmyInfo.Commons.Config.Application.merge_config/1` merges maps only.
     """
 
     alias SetmyInfo.Commons.File.Operations, as: FileOperations
@@ -28,7 +38,8 @@ defmodule SetmyInfo.Commons.Yaml.Parser do
     `:post_parse_function` (applied to the parsed value); both default to
     identity, and `nil` is accepted in place of the map. Returns the parsed
     (and post-processed) value, or `nil` when the content is not valid YAML.
-    A missing file reads as `""`, which parses to an empty document.
+    A missing file reads as `""`, the empty YAML document, and parses to `%{}`
+    - not to `nil`, and not the way the JSON parser answers the same case.
     """
     @spec parse_yaml_file(Path.t(), post_actions() | nil) :: term() | nil
     def parse_yaml_file(file_name, post_actions \\ %{}) do

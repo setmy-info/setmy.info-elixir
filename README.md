@@ -42,14 +42,20 @@ mix format            # reformat in place - run before every commit
 iex -S mix            # all four endpoints up; http://127.0.0.1:48101/
 ```
 
+Everything here runs from the command line and needs no IDE. For IntelliJ IDEA there is one, see
+[`docs/idea-setup.md`](docs/idea-setup.md).
+
 Indentation is **4 spaces**, like the rest of setmy.info (`.editorconfig`). Elixir's formatter has no width option and
-always emits 2, so `apps/commons/formatter/` holds a `mix format` plugin (`SetmyInfo.Elixir.Formatter.FourSpaces`, unit
-tested in `apps/commons/test/unit/`) that runs the stock formatter and then widens each nesting level to 4 — alignment
+always emits 2, so the `formatter` app (`apps/formatter`) is a `mix format` plugin (`SetmyInfo.Elixir.Formatter.FourSpaces`,
+unit tested in `apps/formatter/test/unit/`) that runs the stock formatter and then widens each nesting level to 4 — alignment
 of wrapped continuation lines and the contents of heredocs and multi-line strings are left exactly as they are, and if
-widening would change a file's AST the file is left at 2 spaces with a warning rather than corrupted. The root and
+widening would change a file's AST the file is left at 2 spaces with a warning rather than corrupted — except under
+`FOUR_SPACES_STRICT=1` (CI and the pre-commit hook), where that fallback fails the run so no file can slip through the
+gate at 2 spaces. The root and
 per-app `.formatter.exs` files list the plugin, so `mix format` and `mix format --check-formatted` both mean the
-4-space form everywhere — editors, the pre-commit hook and CI included. It is compiled with `commons` (an extra
-`elixirc_paths` entry) but is not in the Hex package.
+4-space form everywhere — editors, the pre-commit hook and CI included, and also with a single app as the current
+project (every app declares `formatter` as a `dev`/`test`-only dependency, so it is never in a release or a package
+requirement).
 
 `mix format` keeps two caches under `_build/dev/.mix/` — the evaluated `.formatter.exs` files and the time of the last
 run, so only files changed since then are looked at — and it loads the plugin from the already compiled beam, so an
@@ -65,7 +71,7 @@ and the check could then never fail). Turn on format-on-save in your editor (Eli
 pre-commit hook:
 
 ```sh
-printf '#!/bin/sh\nmix format --check-formatted\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+printf '#!/bin/sh\nFOUR_SPACES_STRICT=1 mix format --check-formatted\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
 ## Application configuration (`commons` / Hex `setmy_info_commons`)
@@ -142,7 +148,7 @@ and, optionally, a `:line` suffix for one test:
 ```sh
 mix test                                                        # unit tier, every app
 mix test apps/demo_module_c/test/unit/demo_probe_test.exs       # unit tier, one file
-mix test apps/demo_module_c/test/unit/demo_probe_test.exs:10    # one test, by line
+mix test <file>:<line>                                          # one test, by its first line number
 
 mix pre-integration-test                                        # integration tier needs the instances up
 mix test --only integration --no-start                          # every app
@@ -196,17 +202,40 @@ of `a`'s endpoint next to `a`'s own release would fail with `:eaddrinuse`. `conf
 `serve: false` for every app except `RELEASE_NAME`; under Mix every app serves, except in the test VM
 (`config/test.exs`).
 
-Every run also writes **JUnit XML**, one file per app, to `reports/junit/` (`junit_formatter`, wired in each app's
-`test_helper.exs`, directory pinned in `config/test.exs`) — what Jenkins' `junit` step reads. The file name comes from
-`JUNIT_REPORT_FILE` (default `test-junit-report.xml`), so CI gives every tier its own file instead of overwriting the
-previous tier's.
+Every run also writes **JUnit XML**, one file per app *per tier*, to `reports/junit/` (`junit_formatter`, wired in each
+app's `test_helper.exs`, directory pinned in `config/test.exs`) — what Jenkins' `junit` step reads. Every `mix test`
+run would otherwise write the same file, and a job running tier after tier would hand Jenkins only the last tier's
+results, so the file name carries the tier: `mix test.unit` writes `<app>-unit.xml`, `test.integration`
+`<app>-integration.xml`, `test.e2e` `<app>-e2e.xml`, and `mix coverage` / `mix reports` `<app>-coverage-run.xml`.
+
+The tier is derived from the invoked task in `config/test.exs`, not passed in by CI: that file is evaluated once, at
+Mix boot, before any task or alias runs — umbrella recursion re-applies the result rather than re-evaluating the file —
+so an alias could not change it afterwards, but the task name is already in `System.argv()` there. CI therefore sets
+nothing, and a developer running `mix test.integration` by hand gets the same file names. `JUNIT_REPORT_FILE` still
+overrides it, and a bare `mix test` writes `<app>-test-junit-report.xml`.
 
 `mix test.watch` (`mix_test_watch`) re-runs the unit tier on every save during development.
 
-- `test/unit/` — fast, in-process, no files, no environment, no network
-- `test/integration/` — the public API surface, config files, environment variables
-- `test/e2e/` — the library or app driven end to end; for each demo app that includes real HTTP requests (`:httpc`)
-  against its own running endpoint
+The three tiers mean three different things, and no test is written twice to fill them:
+
+- `test/unit/` — one module's own logic, in process, nothing started: no files, no environment, no network. Where a
+  module composes umbrella siblings (`c` on `a` and `b`, `d` on `c`), this tier asserts only what the module itself
+  contributes — its own prefix, its own `foo/0`, the shape of its descriptor — and deliberately says nothing about the
+  siblings' content. That keeps the tier honest without a mocking library.
+- `test/integration/` — parts wired together. For the demo apps that is the real supervision tree opening a real
+  socket (`endpoint_serving_test.exs`, each on a port of its own so the release daemons are untouched), plus, for `c`
+  and `d`, composition with the *real* siblings — the assertions the unit tier left out. For `commons` it is the
+  layers one at a time against real config files and a real process environment. For `formatter` it is the plugin
+  driven through `Mix.Tasks.Format` over files on disk.
+- `test/e2e/` — the whole thing from outside, as it ships. For each demo app that is real HTTP (`:httpc`) against its
+  own **OTP release daemon**. For `formatter` it is `mix format` as a real OS process, which is the only tier that can
+  catch a plugin that fails to load. For `commons` it is the library driven as a real application would.
+
+Nothing in ExUnit ties a directory to a tag, so the two could silently disagree — a file dropped in
+`test/integration/` without `@moduletag :integration` would join the unit tier, run on every `mix test`, and never be
+seen by `mix test.integration`, with the build staying green. **`mix test.tiers`** (part of `mix quality`) is what
+makes the layout binding: it fails when a tier directory's file is missing its tag, when a unit file carries one, or
+when a test file sits outside the three directories.
 
 `commons` splits its tiers by **ADR-0031's dependency table** rather than by speed: unit tests are in-memory only,
 anything reading a config file or an environment variable is integration tier, and the e2e tier drives the whole library
@@ -226,6 +255,7 @@ mix quality            # everything below, in order, as one gate
 | `mix credo --strict`               | Credo                       | style, consistency, refactoring opportunities         |
 | `mix dialyzer`                     | Dialyxir                    | success typing, across the whole umbrella             |
 | `mix xref.cycles`                  | `mix xref`                  | module dependency cycles (none allowed)               |
+| `mix test.tiers`                   | this repo                   | every test file's `@moduletag` matches its tier directory |
 | `mix sobelow`                      | Sobelow                     | static security analysis, per app                     |
 | `mix audit`                        | mix_audit + `mix hex.audit` | dependency vulnerability advisories, retired packages |
 
@@ -243,7 +273,8 @@ mix reports            # everything below, in one go
 | `mix sbom`                | sbom               | CycloneDX software bill of materials, one per app (each is its own artifact), `reports/sbom/<app>.xml`; `-l prod` scope, with one known leak: the umbrella root's own dev/test toolchain is listed too, because the tool resolves the shared `mix.lock` as a whole |
 | `mix security.reports`    | mix_audit, Sobelow | vulnerability reports as JSON, `reports/security/`                                                                                                                                                                                                                 |
 | *(part of `mix reports`)* | `mix deps.tree`    | dependency tree, `reports/deps.tree.txt`                                                                                                                                                                                                                           |
-| every `mix test*` run     | junit_formatter    | JUnit XML per app, `reports/junit/`                                                                                                                                                                                                                                |
+| every `mix test*` run     | junit_formatter    | JUnit XML per app per tier, `reports/junit/`                                                                                                                                                                                                                       |
+| `mix package`             | Hex                | one tarball per app, in that app's own directory (not part of `mix reports`; it is the packaging step, not a document)                                                                                                                                             |
 
 Notes on the two that are not simply the stock invocation:
 
@@ -266,17 +297,22 @@ in `mix.exs` for `mix hex.audit` (Hex's own advisory database is broader, so it 
 
 ## Publishing — one package per app
 
-Every app publishes to Hex separately, with `mix hex.publish package` run from that app's own directory:
+Every app is its own Hex package. From the umbrella root, two tasks cover all of them:
+
+```sh
+mix package            # build every app's tarball - inspect them first
+mix package.publish    # publish every app to Hex (needs HEX_API_KEY)
+```
+
+Both set `HEX_BUILD` for their own subprocesses only (see below) and use `mix hex.publish package` rather than bare
+`mix hex.publish`: the bare form also builds docs, and `ex_doc` is declared at the umbrella root only, where an app
+directory cannot see it. To work on one app instead, set the variable yourself:
 
 ```sh
 cd apps/demo_module_a
-HEX_BUILD=1 mix hex.build          # inspect the tarball first
+HEX_BUILD=1 mix hex.build
 HEX_BUILD=1 mix hex.publish package
 ```
-
-Or every app at once, from the umbrella root: `HEX_BUILD=1 mix cmd mix hex.build`. Use `mix hex.publish package`
-rather than bare `mix hex.publish` from an app directory: the bare form also builds docs, and `ex_doc` is declared at
-the umbrella root only.
 
 ### Why `HEX_BUILD`
 
@@ -289,6 +325,11 @@ That `:hex` option cannot simply be left on permanently: it makes Hex resolve th
 the registry instead of from its `mix.exs`, so `mix compile` run from inside a dependent app's directory then fails to
 compile the sibling. So the option is added only when `HEX_BUILD` is set — see the `sibling/2` helper in
 `apps/demo_module_c/mix.exs`. Day-to-day development never sets it.
+
+This is also why `HEX_BUILD` is **not** a CI-wide environment variable: anything that compiles with it set breaks, so
+a pipeline that exported it globally would fail on its own `mix compile`. `mix package` and `mix package.publish` set
+it in the Mix process and let `mix cmd`'s per-app subprocesses inherit it, which keeps the blast radius inside the two
+tasks that actually need it.
 
 ## Deploying — one release per app
 
@@ -307,23 +348,45 @@ own `config/<env>.exs`, plus `config/runtime.exs` for values that must come from
 
 ## CI
 
-`Jenkinsfile` is the single CI definition, kept stage-for-stage in sync with `jenkinsfile-starter` 1.2.0 (no stages
-added or removed; the starter's learning-example steps are left out, the placeholders filled): Inspection (pre-build
-checks ‖ build tools) → Preparation (`mix deps.get`, `mix deps.unlock --check-unused`) → Build → Publish → Deploy → Tag,
-with the org's standard branch gating (`master` / `devel*` / `release*` / `hotfix*`). The Build stage runs, in order:
-`mix clean`, format check, compile and test-compile (`MIX_ENV=test`) with warnings as errors, the unit tier, the
-integration tier bracketed by
-`mix pre-integration-test` / `mix post-integration-test`, the quality gates, `mix reports`, the e2e tier bracketed by
-`mix pre-e2e-test` / `mix post-e2e-test`, and
-`HEX_BUILD=1 mix cmd mix hex.build`. Each is its own `mix` line, so the build log names what failed. `post { always }`
-runs both post phases again for anything a failed tier left behind, feeds `reports/junit/*.xml` to Jenkins' `junit`
-step and archives
-`cover/`, `doc/`, `reports/` and the tarballs. Publish (`master` only — Hex has no snapshots, a version publishes
-exactly once, so `devel*` keeps its tarballs as archived artifacts) runs
-`HEX_BUILD=1 mix cmd mix hex.publish package --yes` when
-`HEX_API_KEY` is set (`package`, because the bare form also builds docs with `ex_doc`, a root-only dependency an app
-directory cannot see); Deploy builds the releases with `mix release.all --overwrite` for the target `MIX_ENV`. No GitHub
-Actions workflow.
+`Jenkinsfile` is the single CI definition, kept **stage for stage and step for step** in sync with
+`jenkinsfile-starter` 1.2.0 — the org's mandatory pipeline structure. No stage is added, renamed or removed, and the
+steps sit in the starter's order; only the two things the starter asks a project to do differ: its numbered
+learning-example steps are left out, and its `echo` placeholders are replaced by the Mix commands that do the work.
+Inspection (pre-build checks ‖ build tools) → Preparation (`mix deps.get`, `mix deps.unlock --check-unused`) → Build →
+Publish → Deploy → Tag, with the org's standard branch gating (`master` / `devel*` / `release*` / `hotfix*`), plus the
+starter's `pollSCM` trigger and its `quietPeriod` / `disableConcurrentBuilds(abortPrevious: true)` options so a burst
+of commits becomes one build of the newest change.
+
+The file is **declarative**, and adds no function to the starter's own `runCommand(String)` — the one helper the
+starter needs because `sh` and `bat` are different steps. Where the previous version reached for Groovy, the work now
+happens either in a declarative directive or in the build itself:
+
+| Was | Is now |
+|-----|--------|
+| `runCommand(Map, String)` building a per-platform environment prefix | the `environment` block, and Mix tasks that set what only they need |
+| `JUNIT_REPORT_FILE` passed per tier by CI | derived from the invoked task in `config/test.exs` (see "Tests") |
+| `HEX_BUILD=1` prefixed onto the packaging commands | `mix package` / `mix package.publish` set it for their own subprocesses |
+| a `publishPackages()` helper wrapping an `if` | `when { expression { env.HEX_API_KEY } }` on the Release stage |
+| `MIX_ENV=test mix compile` (Bourne-shell syntax, breaks under `bat`) | `mix test.compile`, whose env comes from `preferred_envs` |
+
+The Build stage runs, each on its own `mix` line so the log names what failed: `mix clean`, `mix compile
+--warnings-as-errors`, `mix test.compile`, `mix test.unit`, `mix test.integration`, `mix format --check-formatted`,
+`mix quality`, `mix reports`, `mix test.e2e`, `mix package`. The integration and e2e tiers bracket themselves with
+their own pre and post phases (`lifecycle.exs`), so CI does not invoke those separately.
+
+Formatting is never *done* here. `mix format` rewrites files, and reformatting on the build server would leave changes
+in the Jenkins workspace that are never committed — so the check could then never fail. Formatting stays the
+developer's own manual step; the build only verifies it, with `mix format --check-formatted` under
+`FOUR_SPACES_STRICT=1` (set in the `environment` block).
+
+`post { always }` runs both post phases again for anything a failed tier left behind, feeds `reports/junit/*.xml` to
+Jenkins' `junit` step and archives `cover/`, `doc/`, `reports/` and the tarballs. Publish is `master` only — Hex has no
+snapshots, a version publishes exactly once, so `devel*` keeps its tarballs as archived artifacts instead. Deploy
+builds the releases with `mix release.all --overwrite`, the target `MIX_ENV` coming from a per-stage `environment`
+block. No GitHub Actions workflow.
+
+`smi-jenkinsfile -b <branch>` runs the pipeline locally; `develop`, `master` and `hotfix-1` are all verified to select
+the stages this section describes.
 
 ### Hotfix branches (`hotfix*`)
 

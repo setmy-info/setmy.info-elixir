@@ -30,7 +30,15 @@ defmodule SetmyInfo.Commons.Environment.Variables do
 
     @doc """
     Reads `variable_name` through `StringOperations.to_boolean/2`: `false`
-    when unset, raises on a value that is not `true`/`yes`/`false`/`no`.
+    when the variable is not set at all, and otherwise `true`/`yes` or
+    `false`/`no` in any case.
+
+    Note that "not set" means `nil`, not "empty". `SMI_X=` is a *set* variable
+    whose value is `""`, so it takes the parsing path and raises
+    `ArgumentError` - it does not fall back to `false`. Unlike the int, float
+    and JSON readers below, which return their default for anything they
+    cannot parse, this one rejects; the divergence is
+    `StringOperations.to_boolean/2`'s, kept from both older rows.
     """
     @spec get_boolean_environment_variable(String.t()) :: boolean()
     def get_boolean_environment_variable(variable_name) do

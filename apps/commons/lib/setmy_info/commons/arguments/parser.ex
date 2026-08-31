@@ -4,7 +4,7 @@ defmodule SetmyInfo.Commons.Arguments.Parser do
     (clj-commons, `clojure.tools.cli`) / `smi_python_commons.arguments.parser`
     (python-commons, `argparse`).
 
-    Two deliberate differences from the originals:
+    Three deliberate differences from the originals:
 
     * The full argument list is parsed, nothing is stripped. python-commons
       does `argv[1:]` because Python's `sys.argv[0]` is the script path;
@@ -54,6 +54,9 @@ defmodule SetmyInfo.Commons.Arguments.Parser do
     @doc """
     Raw scan for a single long option's value, independent of any declared
     option set: `--flag=value` or `--flag value`, last occurrence winning.
+    Everything after a bare `--` is positional, exactly as `OptionParser`
+    treats it - the two parsing paths must agree about the same argv. A value
+    that itself starts with `--` can only be passed in the `=` form.
 
     `SetmyInfo.Commons.Config.Overrides` needs this because configuration
     override flags (`--smi-server-port`) are derived from the *loaded YAML*,
@@ -62,6 +65,7 @@ defmodule SetmyInfo.Commons.Arguments.Parser do
     @spec find_option_value([String.t()], String.t()) :: String.t() | nil
     def find_option_value(argv, option_name) do
         argv
+        |> Enum.take_while(&(&1 != "--"))
         |> Enum.with_index()
         |> Enum.reduce(nil, fn {token, index}, acc ->
             option_value_at(argv, token, index, option_name) || acc

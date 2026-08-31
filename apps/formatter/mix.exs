@@ -1,9 +1,9 @@
-defmodule Commons.MixProject do
+defmodule Formatter.MixProject do
     use Mix.Project
 
     def project do
         [
-            app: :commons,
+            app: :formatter,
             version: "1.0.0",
             build_path: "../../_build",
             config_path: "../../config/config.exs",
@@ -11,44 +11,43 @@ defmodule Commons.MixProject do
             lockfile: "../../mix.lock",
             elixir: "~> 1.19",
             description:
-                "Spring Boot style layered application configuration - YAML files, profiled YAML " <>
-                    "overlays, environment placeholder resolution, environment variable overrides and " <>
-                    "CLI option overrides. Elixir row of clj-commons / python-commons.",
+                "4-space indentation plugin for `mix format`: runs the stock formatter and widens " <>
+                    "each nesting level from 2 to 4 spaces, leaving alignment and string values untouched.",
             package: package(),
             start_permanent: Mix.env() == :live,
             # Declared per app, not only at the umbrella root: `mix test --cover`
             # runs with each app as the current project, and without this it falls
             # back to Mix's built-in cover tool instead of ExCoveralls.
             test_coverage: [tool: ExCoveralls],
-            # test/support/ holds the shared ExUnit.CaseTemplate, required from
-            # test_helper.exs rather than loaded as a test file.
-            test_ignore_filters: [~r"^test/support/"],
             deps: deps()
         ]
     end
 
-    # Explicit file allowlist rather than Hex's default set: this app carries
-    # test/resources/*.yaml fixtures that must never ship to consumers.
+    # A build tool, not an OTP application: no supervision tree, and no
+    # `:mix` in extra_applications - the module is only ever called from
+    # inside a running Mix (`mix format`), never from a release.
+    def application do
+        [extra_applications: []]
+    end
+
+    # Explicit file allowlist rather than Hex's default set, matching every
+    # other app in this umbrella.
     defp package do
         [
-            name: "setmy_info_commons",
+            name: "setmy_info_formatter",
             licenses: ["MIT"],
             links: %{"GitHub" => "https://github.com/setmy-info/setmy.info-elixir"},
             files: ["lib", "mix.exs", ".formatter.exs"]
         ]
     end
 
-    # yaml_elixir is a real runtime dependency: parsing application.yaml is this
-    # library's whole job. sobelow is declared per app for the reason every other
-    # app declares it - see demo_module_a's mix.exs comment.
+    # sobelow and sbom are declared per app rather than at the umbrella root:
+    # sobelow refuses to run against an umbrella root ("each application should
+    # be scanned separately") and an SBOM is per artifact, so both always run
+    # with a single app as the current project - and a task's binary only
+    # resolves against that project's own deps.
     defp deps do
         [
-            # The umbrella's 4-space `mix format` plugin (apps/formatter): a build
-            # tool, so dev/test only - never in releases, never a package
-            # requirement. Declared by every app so `mix format` also works with
-            # that app as the current project (`cd apps/<name> && mix format`).
-            {:formatter, in_umbrella: true, only: [:dev, :test], runtime: false},
-            {:yaml_elixir, "~> 2.12"},
             {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
             {:sbom, "~> 0.10", only: [:dev, :test], runtime: false},
             {:excoveralls, "~> 0.18", only: :test, runtime: false},
@@ -57,12 +56,6 @@ defmodule Commons.MixProject do
             # dependency is not on the code path when this app is the current
             # project (`cd apps/<name> && mix test`).
             {:junit_formatter, "~> 3.4", only: :test, runtime: false}
-        ]
-    end
-
-    def application do
-        [
-            extra_applications: [:logger]
         ]
     end
 end

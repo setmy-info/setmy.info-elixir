@@ -9,6 +9,9 @@ defmodule SetmyInfo.DemoModuleC.Web do
 
     use Plug.Builder
 
+    # Tags each request's log lines with a request_id - config/live.exs and
+    # config/prelive.exs carry it in the logger metadata.
+    plug(Plug.RequestId)
     plug(:index)
     plug(Plug.Static, at: "/", from: {:demo_module_c, "priv/web"})
     plug(:not_found)

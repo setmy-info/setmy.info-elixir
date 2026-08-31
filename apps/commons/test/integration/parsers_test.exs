@@ -62,6 +62,50 @@ defmodule SetmyInfo.Commons.Parsers.IntegrationTest do
         assert JsonParser.parse_json_file("./test/resources/nope.json") == nil
     end
 
+    test "parse_json_file/2 runs both post_actions hooks" do
+        path = Path.join(System.tmp_dir!(), "smi_commons_parsers_hooks_test.json")
+        File.write!(path, ~s({"port": "${SOME_PORT}"}))
+        on_exit(fn -> File.rm(path) end)
+
+        post_actions = %{
+            post_read_function: &String.replace(&1, "${SOME_PORT}", "8080"),
+            post_parse_function: &Map.get(&1, "port")
+        }
+
+        assert JsonParser.parse_json_file(path, post_actions) == "8080"
+    end
+
+    # The one place the two file parsers disagree, and the reason both
+    # moduledocs carry the comparison: "" is a valid, empty YAML document but
+    # is not JSON at all. Pinned here so the docs cannot drift from it.
+    test "the parsers agree on invalid content and disagree on a missing file" do
+        yaml_path = Path.join(System.tmp_dir!(), "smi_commons_parsers_broken_test.yaml")
+        json_path = Path.join(System.tmp_dir!(), "smi_commons_parsers_broken_test.json")
+        File.write!(yaml_path, "a: [1, 2\n  b: :::")
+        File.write!(json_path, "{not json")
+
+        on_exit(fn ->
+            File.rm(yaml_path)
+            File.rm(json_path)
+        end)
+
+        assert YamlParser.parse_yaml_file(yaml_path) == nil
+        assert JsonParser.parse_json_file(json_path) == nil
+
+        assert YamlParser.parse_yaml_file("./test/resources/nope.yaml") == %{}
+        assert JsonParser.parse_json_file("./test/resources/nope.json") == nil
+    end
+
+    # YAML rarely fails outright - it succeeds with a scalar, which is why
+    # merge_config/1 merges maps only.
+    test "accidental garbage parses as a YAML scalar rather than failing" do
+        path = Path.join(System.tmp_dir!(), "smi_commons_parsers_scalar_test.yaml")
+        File.write!(path, "just a bare word")
+        on_exit(fn -> File.rm(path) end)
+
+        assert YamlParser.parse_yaml_file(path) == "just a bare word"
+    end
+
     test "parse_file_by_type/1 dispatches on the extension" do
         assert ConfigApplication.parse_file_by_type(@yaml_fixture) |> Map.has_key?("d")
         assert ConfigApplication.parse_file_by_type("./test/resources/application.properties") == nil

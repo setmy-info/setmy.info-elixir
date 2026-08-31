@@ -42,7 +42,16 @@ defmodule SetmyInfo.Commons.Config.Overrides do
 
     The override string is coerced to the type of the value it replaces, so a
     YAML `port: 8080` stays an integer and `secure: false` stays a boolean.
-    A list-valued key splits on commas. Anything else stays a string.
+    A list-valued key splits on commas. Anything else stays a string. A value
+    that cannot be cast raises `ArgumentError` naming the variable or flag and
+    the path - one policy for every type, because a typo'd override silently
+    ignored (or crashing namelessly) is how services run on the wrong port.
+
+    Two edges worth knowing: the underscore inside a key and the path
+    separator collapse to the same character, so `smi.a_b` and `smi.a.b` both
+    answer to `SMI_A_B` - when both exist, one variable overrides both keys;
+    and an empty-map leaf (`feature: {}`) is overridable, taking the string
+    branch of the coercion.
     """
 
     alias SetmyInfo.Commons.Arguments.Parser, as: ArgumentsParser
@@ -103,10 +112,22 @@ defmodule SetmyInfo.Commons.Config.Overrides do
         )
     end
 
-    @doc "`%{path => coerced_value}` for every leaf whose CLI flag appears in `argv`."
+    @doc """
+    `%{path => coerced_value}` for every leaf whose CLI flag appears in
+    `argv`. The control flags (`--smi-profiles` and friends) are never
+    consumed as value overrides - the same guard `environment_overrides/2`
+    applies to `SMI_PROFILES`, on this layer.
+    """
     @spec cli_overrides(map(), [String.t()], [String.t()] | nil) :: %{path() => term()}
     def cli_overrides(config, argv, root_keys \\ nil) do
-        collect(config, root_keys, &cli_option_names/1, &ArgumentsParser.find_option_value(argv, &1))
+        reserved = Constants.reserved_cli_options()
+
+        collect(
+            config,
+            root_keys,
+            fn path -> path |> cli_option_names() |> Enum.reject(&(&1 in reserved)) end,
+            &ArgumentsParser.find_option_value(argv, &1)
+        )
     end
 
     @doc "Writes collected overrides back into the configuration map."
@@ -130,12 +151,19 @@ defmodule SetmyInfo.Commons.Config.Overrides do
         |> Enum.reduce(%{}, fn path, acc ->
             case first_present(names_builder.(path), lookup) do
                 nil -> acc
-                raw -> Map.put(acc, path, coerce_like(get_in(config, path), raw))
+                {name, raw} -> Map.put(acc, path, coerce_like(get_in(config, path), raw, name, path))
             end
         end)
     end
 
-    defp first_present(names, lookup), do: Enum.find_value(names, lookup)
+    defp first_present(names, lookup) do
+        Enum.find_value(names, fn name ->
+            case lookup.(name) do
+                nil -> nil
+                raw -> {name, raw}
+            end
+        end)
+    end
 
     defp paths_of(key, value) when is_map(value) and map_size(value) > 0 do
         Enum.flat_map(value, fn {child_key, child_value} ->
@@ -164,15 +192,40 @@ defmodule SetmyInfo.Commons.Config.Overrides do
 
     defp flat_segment(segment), do: String.replace(segment, ~r/[^A-Za-z0-9]+/, "_")
 
-    defp coerce_like(current, raw) when is_boolean(current),
-        do: StringOperations.to_boolean(raw, current)
+    # One failure policy for every type: reject loudly, naming the source.
+    # (`StringOperations.to_int/2` and friends fall back to a default instead,
+    # which is right for reading a lone value and wrong here - an override
+    # that silently keeps the old value hides the typo that broke it.)
+    defp coerce_like(current, raw, name, path) when is_boolean(current) do
+        case String.downcase(raw) do
+            value when value in ["true", "yes"] -> true
+            value when value in ["false", "no"] -> false
+            _other -> reject(name, path, raw, "a boolean (true/yes/false/no)")
+        end
+    end
 
-    defp coerce_like(current, raw) when is_integer(current),
-        do: StringOperations.to_int(raw, current)
+    defp coerce_like(current, raw, name, path) when is_integer(current) do
+        case Integer.parse(raw) do
+            {value, ""} -> value
+            _other -> reject(name, path, raw, "an integer")
+        end
+    end
 
-    defp coerce_like(current, raw) when is_float(current),
-        do: StringOperations.to_float(raw, current)
+    defp coerce_like(current, raw, name, path) when is_float(current) do
+        case Float.parse(raw) do
+            {value, ""} -> value
+            _other -> reject(name, path, raw, "a float")
+        end
+    end
 
-    defp coerce_like(current, raw) when is_list(current), do: StringOperations.split_and_trim(raw)
-    defp coerce_like(_current, raw), do: raw
+    defp coerce_like(current, raw, _name, _path) when is_list(current),
+        do: StringOperations.split_and_trim(raw)
+
+    defp coerce_like(_current, raw, _name, _path), do: raw
+
+    @spec reject(String.t(), path(), String.t(), String.t()) :: no_return()
+    defp reject(name, path, raw, wanted) do
+        raise ArgumentError,
+              "override #{name} for #{Enum.join(path, ".")} is #{inspect(raw)}, not #{wanted}"
+    end
 end
