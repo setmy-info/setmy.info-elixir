@@ -31,3 +31,5 @@ erl_crash.dump
 
 claude.session.sh
 claude.session.cmd
+cursor.session.sh
+cursor.session.cmd
