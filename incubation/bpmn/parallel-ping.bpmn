@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0jxxz4n" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.51.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:process id="Process_10lwzve" isExecutable="true">
+    <bpmn:startEvent id="start_pinging" name="Start">
+      <bpmn:outgoing>Flow_1gtothl</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:endEvent id="end_pinging" name="End">
+      <bpmn:incoming>Flow_1ekonn0</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1gtothl" sourceRef="start_pinging" targetRef="initialize_context" />
+    <bpmn:sequenceFlow id="Flow_1mi0ugj" sourceRef="ping_localhost" targetRef="write_done" />
+    <bpmn:sequenceFlow id="Flow_1yma6hh" sourceRef="initialize_context" targetRef="ping_localhost" />
+    <bpmn:serviceTask id="initialize_context" name="Initialize Context">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="initialize_context" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1gtothl</bpmn:incoming>
+      <bpmn:outgoing>Flow_1yma6hh</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="ping_localhost" name="Ping localhost">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="ping_localhost" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1yma6hh</bpmn:incoming>
+      <bpmn:outgoing>Flow_1mi0ugj</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics />
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_1ekonn0" sourceRef="write_done" targetRef="end_pinging" />
+    <bpmn:serviceTask id="write_done" name="Write Done">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="write_done" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1mi0ugj</bpmn:incoming>
+      <bpmn:outgoing>Flow_1ekonn0</bpmn:outgoing>
+    </bpmn:serviceTask>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_10lwzve">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="start_pinging">
+        <dc:Bounds x="182" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="189" y="145" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1ec64k6_di" bpmnElement="end_pinging">
+        <dc:Bounds x="782" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="790" y="145" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0ccp1n3_di" bpmnElement="initialize_context">
+        <dc:Bounds x="270" y="80" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_16b0fwz_di" bpmnElement="ping_localhost">
+        <dc:Bounds x="430" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1r2nxa0_di" bpmnElement="write_done">
+        <dc:Bounds x="580" y="80" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1gtothl_di" bpmnElement="Flow_1gtothl">
+        <di:waypoint x="218" y="120" />
+        <di:waypoint x="270" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1mi0ugj_di" bpmnElement="Flow_1mi0ugj">
+        <di:waypoint x="530" y="120" />
+        <di:waypoint x="580" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1yma6hh_di" bpmnElement="Flow_1yma6hh">
+        <di:waypoint x="370" y="120" />
+        <di:waypoint x="430" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1ekonn0_di" bpmnElement="Flow_1ekonn0">
+        <di:waypoint x="680" y="120" />
+        <di:waypoint x="782" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
