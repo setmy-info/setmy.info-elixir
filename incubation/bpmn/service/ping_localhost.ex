@@ -1,25 +1,25 @@
 defmodule Bpmn.Workflow.ParallelPing.Handlers.PingLocalhost do
   @moduledoc """
-  Step 2: runs `count` times in parallel (BPMN multi-instance, isSequential=false).
+  Step 2: one instance per element of `hosts`, all running in parallel.
 
-  Each instance pings localhost once. The value put under `_mi_current_result`
-  is what rodar collects into the `_mi_results` list once all instances finish.
-  Note: rodar shares one context between parallel instances, so `loopCounter`
-  is only an approximation of "which instance am I".
+  The current element arrives as `host` (Modeler: Input element). The value
+  returned under `_mi_current_result` is what rodar appends to the output
+  collection (`pingResults`) once every instance has finished.
+  Note: rodar shares one context between parallel instances, so `host` and
+  `loopCounter` are only reliable when the instances start far enough apart.
   """
 
   @behaviour Rodar.Activity.Task.Service.Handler
 
-  @host "localhost"
-
   @impl true
   def execute(_attrs, data) do
-    {micros, ok?} = :timer.tc(fn -> ping(@host) end)
+    host = data["host"] || "localhost"
+    {micros, ok?} = :timer.tc(fn -> ping(host) end)
 
     {:ok,
      %{
        "_mi_current_result" => %{
-         "host" => @host,
+         "host" => host,
          "ok" => ok?,
          "loop" => data["loopCounter"],
          "took_ms" => div(micros, 1000)

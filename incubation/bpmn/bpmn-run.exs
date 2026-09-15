@@ -36,15 +36,16 @@ defmodule BpmnRun do
   def run(bpmn_file) do
     load_handlers()
 
-    diagram =
-      bpmn_file
-      |> File.read!()
-      |> Diagram.load(bpmn_file: bpmn_file, app_name: @app_name)
+    xml = File.read!(bpmn_file)
+    diagram = Diagram.load(xml, bpmn_file: bpmn_file, app_name: @app_name)
 
-    [{:bpmn_process, %{id: process_id} = attrs, _elements} = process | _] = diagram.processes
+    [{:bpmn_process, %{id: process_id} = attrs, elements} | _] = diagram.processes
+    elements = apply_zeebe_multi_instance(elements, xml)
+    process = {:bpmn_process, attrs, elements}
 
     IO.puts("\n=== #{Map.get(attrs, :name, process_id)} (#{process_id}) ===\n")
     print_discovery(diagram.discovery, bpmn_file)
+    print_multi_instance(elements)
 
     # Service task handlers are injected into the diagram by discovery;
     # other task types (user, send, ...) go through the TaskRegistry.
@@ -71,6 +72,92 @@ defmodule BpmnRun do
     IO.puts("  Data:   #{inspect(Rodar.Workflow.process_data(pid), pretty: true)}")
   end
 
+  # --- Zeebe multi-instance adapter ---
+  #
+  # Camunda Modeler (Camunda 8 target) stores multi-instance settings as
+  #   <zeebe:loopCharacteristics inputCollection="=hosts" inputElement="host"
+  #                              outputCollection="pingResults" outputElement="=result"/>
+  # rodar only understands the BPMN-standard loopDataInputRef / inputDataItem /
+  # outputDataItem, so translate here instead of hand-editing the XML.
+  # outputElement cannot be mapped: rodar always collects the value a handler
+  # returns under "_mi_current_result".
+
+  defp apply_zeebe_multi_instance(elements, xml) do
+    zeebe = zeebe_loop_settings(xml)
+
+    elements
+    |> to_element_map()
+    |> Map.new(fn
+      {id, {type, %{loop_characteristics: %{type: :multi_instance} = loop} = attrs}}
+      when is_map_key(zeebe, id) ->
+        z = zeebe[id]
+
+        loop =
+          loop
+          |> put_if_nil(:loopDataInputRef, strip_feel(z["inputCollection"]))
+          |> put_if_nil(:inputDataItem, z["inputElement"])
+          |> put_if_nil(:outputDataItem, z["outputCollection"])
+
+        {id, {type, %{attrs | loop_characteristics: loop}}}
+
+      other ->
+        other
+    end)
+  end
+
+  defp to_element_map(elements) when is_map(elements), do: elements
+
+  defp to_element_map(elements) when is_list(elements) do
+    Map.new(elements, fn {_type, %{id: id}} = elem -> {id, elem} end)
+  end
+
+  defp put_if_nil(map, _key, nil), do: map
+  defp put_if_nil(map, key, value), do: Map.update(map, key, value, &(&1 || value))
+
+  defp strip_feel(nil), do: nil
+  defp strip_feel("=" <> expr), do: String.trim(expr)
+  defp strip_feel(expr), do: String.trim(expr)
+
+  # Returns %{task_id => %{"inputCollection" => ..., ...}} for every element that
+  # has a multiInstanceLoopCharacteristics with a zeebe:loopCharacteristics inside.
+  defp zeebe_loop_settings(xml) do
+    # erlsom applies nameFun to attribute names too (with an empty prefix).
+    name_fun = fn
+      name, _ns, prefix when prefix in [[], ""] -> to_string(name)
+      name, _ns, prefix -> "#{prefix}:#{name}"
+    end
+
+    {:ok, tree, _} = :erlsom.simple_form(xml, nameFun: name_fun)
+    collect_zeebe_loops(tree, %{})
+  end
+
+  defp collect_zeebe_loops({_tag, attrs, children}, acc) when is_list(children) do
+    acc =
+      with id when is_binary(id) <- attr(attrs, "id"),
+           {_, _, mi_children} <- find_child(children, ":multiInstanceLoopCharacteristics"),
+           {_, _, ext_children} <- find_child(mi_children, ":extensionElements"),
+           {_, z_attrs, _} <- find_child(ext_children, ":loopCharacteristics") do
+        Map.put(acc, id, Map.new(z_attrs, fn {k, v} -> {to_string(k), to_string(v)} end))
+      else
+        _ -> acc
+      end
+
+    Enum.reduce(children, acc, &collect_zeebe_loops/2)
+  end
+
+  defp collect_zeebe_loops(_text, acc), do: acc
+
+  defp find_child(children, suffix) do
+    Enum.find(children, fn
+      {tag, _, _} -> String.ends_with?(to_string(tag), suffix)
+      _ -> false
+    end)
+  end
+
+  defp attr(attrs, name) do
+    Enum.find_value(attrs, fn {k, v} -> if to_string(k) == name, do: to_string(v) end)
+  end
+
   defp module_prefix(bpmn_file) do
     Scaffold.default_module_prefix(@app_name, Scaffold.bpmn_base_name(bpmn_file))
   end
@@ -92,6 +179,21 @@ defmodule BpmnRun do
     end)
 
     IO.puts("")
+  end
+
+  defp print_multi_instance(elements) do
+    Enum.each(elements, fn
+      {id, {_type, %{loop_characteristics: %{type: :multi_instance} = loop}}} ->
+        mode = if loop[:isSequential] == "true", do: "sequential", else: "parallel"
+
+        IO.puts(
+          "  multi-instance: #{id} (#{mode}) over #{loop[:loopDataInputRef] || loop[:loopCardinality]}" <>
+            " as #{loop[:inputDataItem] || "loopCounter"} -> #{loop[:outputDataItem] || "_mi_results"}\n"
+        )
+
+      _ ->
+        :ok
+    end)
   end
 
   defp print_node(%{node_type: :bpmn_sequence_flow}, _context), do: :ok

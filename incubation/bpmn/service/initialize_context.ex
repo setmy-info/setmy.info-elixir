@@ -2,10 +2,10 @@ defmodule Bpmn.Workflow.ParallelPing.Handlers.InitializeContext do
   @moduledoc """
   Step 1: seed the process context.
 
-  `count` decides how many parallel `ping_localhost` instances the BPMN
-  multi-instance task spawns (see `loopCardinality` in the .bpmn file).
-  In real life this step would e.g. ask a DVB host list and set
-  `count` to its length. Here it is hard-coded to 3.
+  `hosts` is the input collection of the multi-instance `ping_localhost` task
+  (Modeler: Multi-instance -> Input collection `=hosts`, Input element `host`).
+  One parallel instance is started per list element. Hard-coded for now;
+  later this can come from a database or a DVB host query.
   """
 
   @behaviour Rodar.Activity.Task.Service.Handler
@@ -14,7 +14,7 @@ defmodule Bpmn.Workflow.ParallelPing.Handlers.InitializeContext do
   def execute(_attrs, _data) do
     {:ok,
      %{
-       "count" => 3,
+       "hosts" => ["localhost", "localhost", "localhost"],
        "started_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
        "started_at_ms" => System.system_time(:millisecond)
      }}
