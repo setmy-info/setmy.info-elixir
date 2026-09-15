@@ -29,6 +29,7 @@ erl_crash.dump
 .lsp/
 .vscode/
 
+.claude
 claude.session.sh
 claude.session.cmd
 cursor.session.sh
