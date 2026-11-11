@@ -45,6 +45,18 @@ iex -S mix            # all four endpoints up; http://127.0.0.1:48101/
 Everything here runs from the command line and needs no IDE. For IntelliJ IDEA there is one, see
 [`docs/idea-setup.md`](docs/idea-setup.md).
 
+### Upgrading dependencies
+
+```sh
+mix deps.outdated     # current vs latest of every dependency (mix hex.outdated --all); exits 1 if any is outdated
+mix deps.upgrade      # newest versions the mix.exs requirements allow (deps.update --all + deps.unlock --unused)
+mix hex.outdated APP  # which requirement holds APP back
+```
+
+`mix deps.upgrade` only moves `mix.lock`, within the requirements. A dependency marked "Update not possible" needs its
+requirement raised (e.g. `~> 1.7` → `~> 2.0`) by hand in the `mix.exs` that declares it, then another `mix deps.upgrade`.
+Run `mix quality` and `mix test.all` before committing the new `mix.lock`.
+
 Indentation is **4 spaces**, like the rest of setmy.info (`.editorconfig`). Elixir's formatter has no width option and
 always emits 2, so the `formatter` app (`apps/formatter`) is a `mix format` plugin (`SetmyInfo.Elixir.Formatter.FourSpaces`,
 unit tested in `apps/formatter/test/unit/`) that runs the stock formatter and then widens each nesting level to 4 — alignment
@@ -395,3 +407,54 @@ review, never the pipeline: a hotfix runs the exact same Inspection → Build pa
 quality, packaging), is not published (only `master` publishes to Hex; `devel*` merely archives its tarballs), and
 deploys to `test` and `prelive` (`HOTFIX_TO_TEST` / `HOTFIX_TO_PRELIVE`). It never deploys `dev` or `live` and never
 tags — merging it to `master` is what does that, through the normal master build.
+
+## Installed software: RPM
+
+The umbrella is installed as its compiled apps (`MIX_ENV=live`), one directory per app like any Erlang
+library, and run by the Elixir and Erlang installed on the machine (`/opt/elixir`, `/opt/erlang`), as the
+user `microservice` of setmy-info-scripts. No OTP release. The RPMs declare no dependencies. One package per environment, as in the other
+setmy.info projects; the two conflict:
+
+| Package                  | Machines                                  | `machine.env`                              |
+|--------------------------|-------------------------------------------|--------------------------------------------|
+| `setmy-info-elixir`      | LIVE                                      | `machine-live.env`: `SMI_PROFILES=live`    |
+| `setmy-info-elixir-test` | TEST                                      | `machine-test.env`: `SMI_PROFILES=test`    |
+
+`src/main/sh` holds the installed files, relative to `/opt/setmy.info`, as in
+setmy-info-scripts. The scripts take the paths from `elixir.sh` of setmy-info-scripts
+(`SMI_ELIXIR_LIB_DIR`, `SMI_ELIXIR_MODULES_DIR`), put `/opt/elixir/bin` and `/opt/erlang/bin` first on
+the `PATH`, put the modules on the code path with `ERL_LIBS` and run the installed `elixir` with the
+build's `sys.config` (`config.exs` + `live.exs`, written by `rpm/Makefile`). A script runs compiled code
+(`elixir -e 'Some.Module.main(System.argv())'`) or a `.exs` script (`elixir some-script.exs`) the same way:
+
+```
+/opt/setmy.info/lib/elixir/modules/<app>/{ebin,priv}            the apps and their Hex libraries
+/opt/setmy.info/lib/elixir/config/sys.config                    the umbrella's configuration
+/opt/setmy.info/bin/smi-elixir-start                            starts an app: the service's ExecStart
+/opt/setmy.info/bin/smi-demo-module-a                           example CLI tool
+/opt/setmy.info/etc/elixir/elixir.env                           every machine
+/opt/setmy.info/etc/elixir/machine.env                          the environment
+/opt/setmy.info/etc/elixir/local.env                            this machine, by hand, in no package
+/opt/setmy.info/etc/systemd/system/setmy-info-elixir@.service   linked from /etc/systemd/system
+/var/opt/setmy.info/elixir                                      working directory
+```
+
+- **Services**: `setmy-info-elixir@<app>.service` runs `smi-elixir-start <app>`, which starts `<app>`
+  with `-<app> serve true` (in `live.exs` no app serves) and, when set, `-logger level
+  $SETMY_INFO_LOG_LEVEL`; systemd loads the env files. `%post` enables and restarts the apps in
+  `%global services` of the spec.
+- **CLI tools**: a module with `main/1` returning the exit status, plus a copy of
+  `src/main/sh/bin/smi-demo-module-a` naming it, listed in `%install` and `%files` of both specs.
+
+```sh
+make                 # mix compile + rpmbuild of both specs, output in ~/rpmbuild/RPMS/noarch
+make deploy-test TEST_HOSTS='one.example.com two.example.com:2222'   # smi-deploy upload + handover
+make deploy-live LIVE_HOSTS='live.example.com'                         # the same to LIVE
+```
+
+The version is `@version` in the root `mix.exs`, bumped with
+`src/main/sh/build/update-versions.sh <new-version> ['changelog line']` (the line goes into the
+`%changelog` of every spec), the RPM release `RELEASE` (Jenkins:
+`SMI_RPM_RELEASE=$BUILD_NUMBER`). No machine is named in this repository: the hosts are `TEST_HOSTS` /
+`LIVE_HOSTS` on the command line, or the Jenkins job variables `SMI_ELIXIR_TEST_HOSTS` /
+`SMI_ELIXIR_LIVE_HOSTS`; without them the Deploy stages deploy nowhere.

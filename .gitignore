@@ -34,3 +34,6 @@ claude.session.sh
 claude.session.cmd
 cursor.session.sh
 cursor.session.cmd
+
+# rpm/Makefile staging directory
+/rpm/.stage

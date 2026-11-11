@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Copyright (C) 2026 Imre Tabur <imre.tabur@mail.ee>
+
+# Starts one installed setmy.info-elixir app, compiled, and runs until stopped: what
+# setmy-info-elixir@<app>.service runs. Only that app opens its endpoint.
+
+. `smi-include elixir.sh`
+
+APP="${1:?Usage: smi-elixir-start <app>}"
+
+# The installed Elixir and Erlang first, so that this one runs and no older one on the PATH.
+PATH="/opt/elixir/bin:/opt/erlang/bin:${PATH}"
+# The compiled apps, modules/<app>/ebin, on the code path.
+ERL_LIBS="${SMI_ELIXIR_MODULES_DIR:-${SMI_ELIXIR_LIB_DIR}/modules}"
+export PATH ERL_LIBS
+
+# sys.config is the build's configuration; the -<app> <key> <value> flags override it.
+exec elixir --erl-config "${SMI_ELIXIR_LIB_DIR}/config/sys.config" \
+    --erl "-${APP} serve true${SETMY_INFO_LOG_LEVEL:+ -logger level ${SETMY_INFO_LOG_LEVEL}}" \
+    --no-halt -e "{:ok, _} = Application.ensure_all_started(:${APP}, :permanent)"

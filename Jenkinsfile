@@ -128,6 +128,10 @@ pipeline {
 
         SMI_PROFILES = 'ci'
 
+        // The RPM release number (rpm/Makefile): every build is a new package, and the
+        // installed one says which build it came from.
+        SMI_RPM_RELEASE = "${env.BUILD_NUMBER}"
+
         MASTER_TO_LIVE = 'DEPLOY'
 
         RELEASE_TO_PRELIVE = 'DEPLOY'
@@ -231,6 +235,10 @@ pipeline {
 
                 echo 'Put here packaging'
                 runCommand 'mix package'
+                // The installed software: the compiled apps in the LIVE and TEST RPMs
+                // (rpm/), deployed below.
+                runCommand 'make spec-check'
+                runCommand 'make rpms'
 
                 echo 'Put here local publishing'
                 echo 'Nothing local to publish: Hex is the registry, see the Publish stage.'
@@ -324,12 +332,17 @@ pipeline {
                             }
                         }
                     }
-                    environment {
-                        MIX_ENV = 'test'
-                    }
                     steps {
                         echo 'Put here software test installations steps'
-                        runCommand 'mix release.all --overwrite'
+                        // The machines come from the job, never from this repository:
+                        // SMI_ELIXIR_TEST_HOSTS, "[user@]host[:port]" separated by spaces.
+                        script {
+                            if (env.SMI_ELIXIR_TEST_HOSTS) {
+                                runCommand 'make deploy-test'
+                            } else {
+                                echo 'No SMI_ELIXIR_TEST_HOSTS in the job: nothing to deploy to'
+                            }
+                        }
                     }
                 }
                 stage('prelive') {
@@ -358,12 +371,16 @@ pipeline {
                         environment name: 'MASTER_TO_LIVE', value: 'DEPLOY'
                         branch 'master'
                     }
-                    environment {
-                        MIX_ENV = 'live'
-                    }
                     steps {
                         echo 'Put here software production installations steps'
-                        runCommand 'mix release.all --overwrite'
+                        // SMI_ELIXIR_LIVE_HOSTS of the job, as for test.
+                        script {
+                            if (env.SMI_ELIXIR_LIVE_HOSTS) {
+                                runCommand 'make deploy-live'
+                            } else {
+                                echo 'No SMI_ELIXIR_LIVE_HOSTS in the job: nothing to deploy to'
+                            }
+                        }
                     }
                 }
             }
@@ -398,6 +415,8 @@ pipeline {
             archiveArtifacts artifacts: 'doc/**, cover/**, reports/**, apps/*/*.tar',
                              allowEmptyArchive: true,
                              fingerprint: true
+
+            runCommand 'ls -l "$(rpm --eval "%{_topdir}")"/RPMS/*/setmy-info-elixir* || true'
         }
 
         success {

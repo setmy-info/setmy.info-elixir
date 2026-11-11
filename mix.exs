@@ -7,6 +7,10 @@ defmodule SetmyInfo.Elixir.MixProject do
 
     alias SetmyInfo.Elixir.Lifecycle
 
+    # The umbrella's own version is the version of the RPMs (rpm/Makefile reads
+    # this line). The apps keep their own versions, their Hex package versions.
+    @version "0.1.0"
+
     @tiers [:integration, :e2e]
     @all_tiers_args ["--include", "integration", "--include", "e2e", "--no-start"]
 
@@ -14,7 +18,7 @@ defmodule SetmyInfo.Elixir.MixProject do
         [
             apps_path: "apps",
             name: "setmy.info-elixir",
-            version: "0.1.0",
+            version: @version,
             start_permanent: Mix.env() == :live,
             deps: deps(),
             aliases: aliases(),
@@ -167,6 +171,15 @@ defmodule SetmyInfo.Elixir.MixProject do
             # Dependency advisories (mix_audit) plus retired/deprecated packages
             # (hex.audit) - the OWASP dependency-check + versions-plugin pair.
             audit: ["deps.audit --ignore-file .mix_audit_ignore", "hex.audit"],
+            # Upgrade every dependency (direct and transitive, across all apps - the
+            # umbrella shares one mix.lock) to the newest version the requirements in
+            # the mix.exs files allow, then drop lock entries nothing uses any more.
+            # Going past a requirement (`~> 1.7` -> `~> 2.0`) is a deliberate edit of
+            # the mix.exs in question; `mix deps.outdated` shows where that is needed.
+            "deps.upgrade": ["deps.update --all", "deps.unlock --unused"],
+            # Current vs latest of every dependency, transitive ones included. Hex
+            # exits 1 when anything is outdated, so this can also serve as a gate.
+            "deps.outdated": ["hex.outdated --all"],
             # Module dependency cycles are a design smell; none are allowed.
             "xref.cycles": ["xref graph --format cycles --fail-above 0"],
             # The tier a test runs in is its TAG; the directory under test/ is

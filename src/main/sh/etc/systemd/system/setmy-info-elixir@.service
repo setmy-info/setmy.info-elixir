@@ -1,0 +1,32 @@
+# One installed setmy.info-elixir app per instance: the instance name is the app,
+# setmy-info-elixir@demo_module_a.service and so on. Installed in
+# /opt/setmy.info/etc/systemd/system, linked from /etc/systemd/system.
+
+[Unit]
+Description=setmy.info Elixir service %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=microservice
+Group=microservice
+WorkingDirectory=/var/opt/setmy.info/elixir
+Environment=HOME=/var/opt/setmy.info/elixir
+Environment=SMI_NAME=%i
+EnvironmentFile=/opt/setmy.info/etc/elixir/elixir.env
+EnvironmentFile=/opt/setmy.info/etc/elixir/machine.env
+EnvironmentFile=-/opt/setmy.info/etc/elixir/local.env
+ExecStart=/opt/setmy.info/bin/smi-elixir-start %i
+# The VM shuts down gracefully on SIGTERM.
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/opt/setmy.info/elixir
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

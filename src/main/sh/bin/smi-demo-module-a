@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Copyright (C) 2026 Imre Tabur <imre.tabur@mail.ee>
+
+# CLI of demo_module_a: SetmyInfo.DemoModuleA.Cli.main/1, compiled. Every CLI tool is this
+# script with another module; a .exs script is run the same way, elixir <file>.exs "$@".
+
+. `smi-include elixir.sh`
+
+# The installed Elixir and Erlang first, so that this one runs and no older one on the PATH.
+PATH="/opt/elixir/bin:/opt/erlang/bin:${PATH}"
+# The compiled apps, modules/<app>/ebin, on the code path.
+ERL_LIBS="${SMI_ELIXIR_MODULES_DIR:-${SMI_ELIXIR_LIB_DIR}/modules}"
+export PATH ERL_LIBS
+
+exec elixir --erl-config "${SMI_ELIXIR_LIB_DIR}/config/sys.config" \
+    -e 'System.halt(SetmyInfo.DemoModuleA.Cli.main(System.argv()))' -- "$@"
